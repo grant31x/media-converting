@@ -16,6 +16,9 @@ LOG_FILE = Path("D:/Python/convert_to_mp4.log")
 # Logging (file log has no emojis)
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+# Dry run mode
+dry_run = True
+
 # Load or initialize conversion log
 if CONVERSION_LOG.exists():
     with open(CONVERSION_LOG, 'r') as f:
@@ -86,6 +89,17 @@ def process_file(file_path):
     ext = file_path.suffix.lower()
     output_path = file_path.with_suffix(".mp4")
     temp_path = file_path.parent / f"temp_{file_path.stem}.mp4"
+
+    if dry_run:
+        if ext == '.mkv':
+            print(f"🎬 [Dry Run] Would convert MKV to MP4: {file_path.name}")
+        elif ext == '.mp4':
+            audio_codec = get_audio_codec(file_path)
+            if "aac" in audio_codec:
+                print(f"⏩ [Dry Run] Skipping (already AAC): {file_path.name}")
+                return "skipped"
+            print(f"🔁 [Dry Run] Would convert audio in MP4: {file_path.name}")
+        return "dry_run"
 
     if ext == '.mkv':
         print(f"🎬 Converting MKV to MP4: {file_path.name}")
