@@ -108,12 +108,12 @@ def process_file(file_path):
             if "h264" in video_codec and "aac" in audio_codec:
                 print(f"📼 [Dry Run] Would remux to MP4: {cleaned_path.name}")
             else:
-                print(f"🎬 [Dry Run] Would convert MKV: {cleaned_path.name}")
+                print(f"🎬 [Dry Run] Would convert MKV: {cleaned_path.name} (Video: {video_codec}, Audio: {audio_codec})")
         elif ext == '.mp4':
             if "aac" in audio_codec:
                 print(f"⏩ [Dry Run] Skipping (AAC): {cleaned_path.name}")
                 return "skipped"
-            print(f"🔁 [Dry Run] Would fix audio in MP4: {cleaned_path.name}")
+            print(f"🔁 [Dry Run] Would fix audio in MP4: {cleaned_path.name} (Audio: {audio_codec} → aac)")
         return "dry_run"
 
     if ext == '.mkv':
