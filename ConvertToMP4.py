@@ -6,8 +6,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
 # Configuration
-FFMPEG_PATH = r"C:\Programs2\ffmpeg\ffmpeg_essentials_build\bin\ffmpeg.exe"
-BASE_FOLDERS = [Path(r"Z:\Movies"), Path(r"Z:\TV Shows"), Path(r"I:\Movies")]
+FFMPEG_PATH = r"C:\\Programs2\\ffmpeg\\ffmpeg_essentials_build\\bin\\ffmpeg.exe"
+BASE_FOLDERS = [Path(r"Z:\\Movies"), Path(r"Z:\\TV Shows"), Path(r"I:\\Movies")]
 VALID_EXTENSIONS = [".mp4", ".mkv"]
 TARGET_AUDIO_CODEC = "aac"
 TARGET_VIDEO_CODECS = ["h264", "hevc"]
@@ -62,44 +62,29 @@ def get_codecs(file_path):
         logging.error(f"ffprobe codec detection failed for {file_path}: {e}")
         return "unknown", "unknown"
 
-def convert_mkv_to_mp4(file_path, video_codec, audio_codec):
+def convert_file(file_path, video_codec, audio_codec):
     new_file = file_path.with_suffix(".mp4")
-    video_copy = video_codec in TARGET_VIDEO_CODECS
-    audio_copy = audio_codec == TARGET_AUDIO_CODEC
-
-    command = [FFMPEG_PATH, "-i", str(file_path)]
-    command += ["-c:v", "copy"] if video_copy else ["-c:v", "libx264", "-preset", "slow", "-crf", "18"]
-    command += ["-c:a", "copy"] if audio_copy else ["-c:a", "aac", "-b:a", "192k"]
-    command += [str(new_file)]
-
-    try:
-        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        file_path.unlink()
-        new_file.rename(file_path.with_suffix(".mp4"))
-        logging.info(f"✅ Converted {file_path.name} to MP4 (Video: {video_codec}, Audio: {audio_codec})")
-        return "converted"
-    except subprocess.CalledProcessError as e:
-        logging.error(f"❌ Failed to convert {file_path.name}: {e}")
-        return "failed"
-
-def fix_audio(file_path):
-    temp_file = file_path.with_name(file_path.stem + "_audiofix" + file_path.suffix)
     command = [
         FFMPEG_PATH,
         "-i", str(file_path),
-        "-c:v", "copy",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        str(temp_file)
+        "-c:v", "copy" if video_codec in TARGET_VIDEO_CODECS else "libx264",
+        "-preset", "slow" if video_codec not in TARGET_VIDEO_CODECS else None,
+        "-crf", "18" if video_codec not in TARGET_VIDEO_CODECS else None,
+        "-c:a", "aac" if audio_codec != TARGET_AUDIO_CODEC else "copy",
+        "-b:a", "192k" if audio_codec != TARGET_AUDIO_CODEC else None,
+        "-c:s", "mov_text",  # keep subtitle
+        str(new_file)
     ]
+    command = [arg for arg in command if arg is not None]  # remove None values
+
     try:
         subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         file_path.unlink()
-        temp_file.rename(file_path)
-        logging.info(f"✅ Replaced {file_path.name} with AAC audio version")
-        return "audio-fixed"
+        new_file.rename(file_path)
+        logging.info(f"✅ Replaced {file_path.name} with converted MP4")
+        return "converted"
     except subprocess.CalledProcessError as e:
-        logging.error(f"❌ Failed to fix audio in {file_path.name}: {e}")
+        logging.error(f"❌ Failed to convert {file_path.name}: {e}")
         return "failed"
 
 def process_file(file_path):
@@ -112,18 +97,25 @@ def process_file(file_path):
     if DRY_RUN:
         if cleaned_path.suffix.lower() == ".mp4":
             if audio_codec != TARGET_AUDIO_CODEC:
-                print(f"🔁 [Dry Run] Would fix audio: {cleaned_path.name} (Audio: {audio_codec} → aac)")
+                print(f"🔁 [Dry Run] Would fix audio in MP4: {cleaned_path.name} (Video: {video_codec}, Audio: {audio_codec} → aac)")
         elif cleaned_path.suffix.lower() == ".mkv":
-            video_action = f"{video_codec} → copy" if video_codec in TARGET_VIDEO_CODECS else f"{video_codec} → h264"
-            audio_action = f"{audio_codec} → copy" if audio_codec == TARGET_AUDIO_CODEC else f"{audio_codec} → aac"
-            print(f"🔁 [Dry Run] Would convert: {cleaned_path.name} (Video: {video_action}, Audio: {audio_action})")
+            actions = []
+            if video_codec not in TARGET_VIDEO_CODECS:
+                actions.append(f"Video: {video_codec} → h264")
+            else:
+                actions.append(f"Video: {video_codec} (keep)")
+            if audio_codec != TARGET_AUDIO_CODEC:
+                actions.append(f"Audio: {audio_codec} → aac")
+            else:
+                actions.append(f"Audio: {audio_codec} (keep)")
+            print(f"🔁 [Dry Run] Would convert MKV to MP4: {cleaned_path.name} ({', '.join(actions)})")
         return "dry-run"
 
     if cleaned_path.suffix.lower() == ".mp4" and audio_codec != TARGET_AUDIO_CODEC:
-        return fix_audio(cleaned_path)
+        return convert_file(cleaned_path, video_codec, audio_codec)
 
     if cleaned_path.suffix.lower() == ".mkv":
-        return convert_mkv_to_mp4(cleaned_path, video_codec, audio_codec)
+        return convert_file(cleaned_path, video_codec, audio_codec)
 
     return "skipped"
 
@@ -148,7 +140,7 @@ def main():
         for future in tqdm(as_completed(futures), total=len(futures), desc="Scanning Media"):
             future.result()
 
-    for folder in [Path(r"Z:\Movies"), Path(r"I:\Movies")]:
+    for folder in [Path(r"Z:\\Movies"), Path(r"I:\\Movies")]:
         remove_empty_dirs(folder)
 
 if __name__ == "__main__":
