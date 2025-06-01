@@ -1,8 +1,7 @@
-#!/usr/bin/env python3
 import os
-import json
 import subprocess
 import logging
+import json
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
@@ -12,8 +11,18 @@ FFMPEG_PATH = r"C:\\Programs2\\ffmpeg\\ffmpeg_essentials_build\\bin\\ffmpeg.exe"
 BASE_FOLDERS = [Path(r"Z:\\Movies"), Path(r"Z:\\TV Shows"), Path(r"I:\\Movies")]
 VALID_EXTENSIONS = [".mp4", ".mkv"]
 TARGET_AUDIO_CODEC = "aac"
-DRY_RUN = True  # Set to False to actually perform conversions
-STATE_FILE = Path("conversion_state.json")
+TARGET_VIDEO_CODEC = "h264"
+DRY_RUN = False  # Set to True for dry-run mode
+
+# Resume support log
+STATE_LOG = Path("conversion_state.json")
+PROCESSED_FILES = set()
+if STATE_LOG.exists():
+    try:
+        with open(STATE_LOG, "r") as f:
+            PROCESSED_FILES = set(json.load(f))
+    except Exception:
+        PROCESSED_FILES = set()
 
 # Logging
 LOG_FILE = Path("conversion_log.txt")
@@ -28,16 +37,6 @@ CLEANUP_TERMS = [
     "1080p", "720p", "BluRay", "x264", "YTS", "BRRip", "WEBRip", "WEB-DL",
     "HDRip", "DVDRip", "AAC", "5.1", "H264", "H265", "HEVC"
 ]
-
-def load_state():
-    if STATE_FILE.exists():
-        with open(STATE_FILE, "r") as f:
-            return json.load(f)
-    return {}
-
-def save_state(state):
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=2)
 
 def clean_filename(file_path):
     name = file_path.stem
@@ -75,24 +74,30 @@ def get_codecs(file_path):
         return "unknown", "unknown"
 
 def convert_file(file_path):
-    temp_file = file_path.with_suffix(".mp4")
+    new_file = file_path.with_suffix(".mp4")
+    temp_file = new_file.with_name(file_path.stem + "_convert.mp4")
     command = [
         FFMPEG_PATH,
         "-i", str(file_path),
-        "-c:v", "copy" if get_codecs(file_path)[0] == "h264" else "libx264",
+        "-map", "0",
+        "-c:v", "libx264",
         "-preset", "slow",
         "-crf", "18",
         "-c:a", "aac",
         "-b:a", "192k",
-        "-c:s", "mov_text",
+        "-c:s", "copy",
         str(temp_file)
     ]
     try:
         subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        file_path.unlink()
-        temp_file.rename(file_path.with_suffix(".mp4"))
-        logging.info(f"✅ Replaced {file_path.name} with converted MP4")
-        return "converted"
+        if temp_file.exists() and temp_file.stat().st_size > 1_000_000:
+            file_path.unlink()
+            temp_file.rename(file_path)
+            logging.info(f"✅ Replaced {file_path.name} with converted MP4")
+            return "converted"
+        else:
+            logging.error(f"⚠️ Conversion output invalid or too small for {file_path.name}")
+            return "failed"
     except subprocess.CalledProcessError as e:
         logging.error(f"❌ Failed to convert {file_path.name}: {e}")
         return "failed"
@@ -102,28 +107,33 @@ def fix_audio(file_path):
     command = [
         FFMPEG_PATH,
         "-i", str(file_path),
+        "-map", "0",
         "-c:v", "copy",
         "-c:a", "aac",
         "-b:a", "192k",
-        "-c:s", "mov_text",
+        "-c:s", "copy",
         str(temp_file)
     ]
     try:
         subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        file_path.unlink()
-        temp_file.rename(file_path)
-        logging.info(f"✅ Replaced {file_path.name} with AAC audio version")
-        return "audio-fixed"
+        if temp_file.exists() and temp_file.stat().st_size > 1_000_000:
+            file_path.unlink()
+            temp_file.rename(file_path)
+            logging.info(f"✅ Replaced {file_path.name} with AAC audio version")
+            return "audio-fixed"
+        else:
+            logging.error(f"⚠️ Audio fix output invalid or too small for {file_path.name}")
+            return "failed"
     except subprocess.CalledProcessError as e:
         logging.error(f"❌ Failed to fix audio in {file_path.name}: {e}")
         return "failed"
 
-def process_file(file_path, state):
-    str_path = str(file_path)
-    if str_path in state:
+def process_file(file_path):
+    if not file_path.exists() or file_path.suffix.lower() not in VALID_EXTENSIONS:
         return "skipped"
 
-    if not file_path.exists() or file_path.suffix.lower() not in VALID_EXTENSIONS:
+    file_id = str(file_path.resolve())
+    if file_id in PROCESSED_FILES:
         return "skipped"
 
     cleaned_path = clean_filename(file_path)
@@ -131,21 +141,24 @@ def process_file(file_path, state):
 
     if DRY_RUN:
         if cleaned_path.suffix.lower() == ".mp4" and audio_codec != TARGET_AUDIO_CODEC:
-            print(f"🔁 [Dry Run] Would fix audio in MP4: {cleaned_path.name} (Video: {video_codec}, Audio: {audio_codec} → aac)")
+            print(f"🔁 [Dry Run] Would fix audio in MP4: {cleaned_path.name} (Audio: {audio_codec} → aac)")
         elif cleaned_path.suffix.lower() == ".mkv":
             print(f"🔁 [Dry Run] Would convert MKV: {cleaned_path.name} (Video: {video_codec} → h264, Audio: {audio_codec} → aac)")
         return "dry-run"
 
     if cleaned_path.suffix.lower() == ".mp4" and audio_codec != TARGET_AUDIO_CODEC:
+        tqdm.write(f"🔧 Fixing audio: {cleaned_path.name} (Audio: {audio_codec} → aac)")
         result = fix_audio(cleaned_path)
     elif cleaned_path.suffix.lower() == ".mkv":
+        tqdm.write(f"🔧 Converting: {cleaned_path.name} (Video: {video_codec} → h264, Audio: {audio_codec} → aac)")
         result = convert_file(cleaned_path)
     else:
         return "skipped"
 
     if result in ["converted", "audio-fixed"]:
-        state[str_path] = result
-        save_state(state)
+        PROCESSED_FILES.add(file_id)
+        with open(STATE_LOG, "w") as f:
+            json.dump(sorted(PROCESSED_FILES), f, indent=2)
 
     return result
 
@@ -160,14 +173,13 @@ def remove_empty_dirs(folder: Path):
                 logging.warning(f"⚠️ Could not remove folder {dir_}: {e}")
 
 def main():
-    state = load_state()
     all_files = []
     for base in BASE_FOLDERS:
         for ext in VALID_EXTENSIONS:
             all_files.extend(base.rglob(f"*{ext}"))
 
     with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = {executor.submit(process_file, f, state): f for f in all_files}
+        futures = {executor.submit(process_file, f): f for f in all_files}
         for future in tqdm(as_completed(futures), total=len(futures), desc="Scanning Media"):
             future.result()
 
