@@ -10,7 +10,7 @@ FFMPEG_PATH = r"C:\Programs2\ffmpeg\ffmpeg_essentials_build\bin\ffmpeg.exe"
 BASE_FOLDERS = [Path(r"Z:\Movies"), Path(r"Z:\TV Shows"), Path(r"I:\Movies")]
 VALID_EXTENSIONS = [".mp4", ".mkv"]
 TARGET_AUDIO_CODEC = "aac"
-TARGET_VIDEO_CODEC = "h264"
+TARGET_VIDEO_CODECS = ["h264", "hevc"]
 DRY_RUN = True  # Set to False to perform actual conversions
 
 # Logging
@@ -62,23 +62,21 @@ def get_codecs(file_path):
         logging.error(f"ffprobe codec detection failed for {file_path}: {e}")
         return "unknown", "unknown"
 
-def convert_file(file_path):
+def convert_mkv_to_mp4(file_path, video_codec, audio_codec):
     new_file = file_path.with_suffix(".mp4")
-    command = [
-        FFMPEG_PATH,
-        "-i", str(file_path),
-        "-c:v", "libx264",
-        "-preset", "slow",
-        "-crf", "18",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        str(new_file)
-    ]
+    video_copy = video_codec in TARGET_VIDEO_CODECS
+    audio_copy = audio_codec == TARGET_AUDIO_CODEC
+
+    command = [FFMPEG_PATH, "-i", str(file_path)]
+    command += ["-c:v", "copy"] if video_copy else ["-c:v", "libx264", "-preset", "slow", "-crf", "18"]
+    command += ["-c:a", "copy"] if audio_copy else ["-c:a", "aac", "-b:a", "192k"]
+    command += [str(new_file)]
+
     try:
         subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         file_path.unlink()
-        new_file.rename(file_path)
-        logging.info(f"✅ Replaced {file_path.name} with converted MP4")
+        new_file.rename(file_path.with_suffix(".mp4"))
+        logging.info(f"✅ Converted {file_path.name} to MP4 (Video: {video_codec}, Audio: {audio_codec})")
         return "converted"
     except subprocess.CalledProcessError as e:
         logging.error(f"❌ Failed to convert {file_path.name}: {e}")
@@ -114,16 +112,18 @@ def process_file(file_path):
     if DRY_RUN:
         if cleaned_path.suffix.lower() == ".mp4":
             if audio_codec != TARGET_AUDIO_CODEC:
-                print(f"🔁 [Dry Run] Would fix audio in MP4: {cleaned_path.name} (Video: {video_codec}, Audio: {audio_codec} → aac)")
+                print(f"🔁 [Dry Run] Would fix audio: {cleaned_path.name} (Audio: {audio_codec} → aac)")
         elif cleaned_path.suffix.lower() == ".mkv":
-            print(f"🔁 [Dry Run] Would convert MKV: {cleaned_path.name} (Video: {video_codec} → h264, Audio: {audio_codec} → aac)")
+            video_action = f"{video_codec} → copy" if video_codec in TARGET_VIDEO_CODECS else f"{video_codec} → h264"
+            audio_action = f"{audio_codec} → copy" if audio_codec == TARGET_AUDIO_CODEC else f"{audio_codec} → aac"
+            print(f"🔁 [Dry Run] Would convert: {cleaned_path.name} (Video: {video_action}, Audio: {audio_action})")
         return "dry-run"
 
     if cleaned_path.suffix.lower() == ".mp4" and audio_codec != TARGET_AUDIO_CODEC:
         return fix_audio(cleaned_path)
 
     if cleaned_path.suffix.lower() == ".mkv":
-        return convert_file(cleaned_path)
+        return convert_mkv_to_mp4(cleaned_path, video_codec, audio_codec)
 
     return "skipped"
 
