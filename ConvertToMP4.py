@@ -90,7 +90,11 @@ def convert_file(file_path):
         str(temp_file)
     ]
     try:
-        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            logging.error(f"❌ FFmpeg error for {file_path.name}:\n{result.stderr}")
+            print(f"❌ FFmpeg error for {file_path.name}:\n{result.stderr}")
+            return "failed"
         if temp_file.exists() and temp_file.stat().st_size > 1_000_000:
             file_path.unlink()
             temp_file.rename(file_path)
@@ -99,8 +103,9 @@ def convert_file(file_path):
         else:
             logging.error(f"⚠️ Conversion output invalid or too small for {file_path.name}")
             return "failed"
-    except subprocess.CalledProcessError as e:
-        logging.error(f"❌ Failed to convert {file_path.name}: {e}")
+    except Exception as e:
+        logging.error(f"❌ Exception during conversion of {file_path.name}: {e}")
+        print(f"❌ Exception during conversion of {file_path.name}: {e}")
         return "failed"
 
 def fix_audio(file_path):
