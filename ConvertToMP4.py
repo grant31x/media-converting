@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
+from collections import defaultdict
 
 # Configuration
 FFMPEG_PATH = r"C:\\Programs2\\ffmpeg\\ffmpeg_essentials_build\\bin\\ffmpeg.exe"
@@ -172,6 +173,14 @@ def remove_empty_dirs(folder: Path):
             except Exception as e:
                 logging.warning(f"⚠️ Could not remove folder {dir_}: {e}")
 
+def summarize_results(counts):
+    print("\n📊 Summary:")
+    print(f"   🔄 Dry-run conversions: {counts['dry-run']}")
+    print(f"   ✅ Converted files: {counts['converted']}")
+    print(f"   🎧 Audio fixed: {counts['audio-fixed']}")
+    print(f"   ⏭️ Skipped: {counts['skipped']}")
+    print(f"   ❌ Failed: {counts['failed']}")
+
 def main():
     all_files = []
     for base in BASE_FOLDERS:
@@ -180,8 +189,12 @@ def main():
 
     with ThreadPoolExecutor(max_workers=4) as executor:
         futures = {executor.submit(process_file, f): f for f in all_files}
+        counts = defaultdict(int)
         for future in tqdm(as_completed(futures), total=len(futures), desc="Scanning Media"):
-            future.result()
+            result = future.result()
+            counts[result] += 1
+
+    summarize_results(counts)
 
     for folder in [Path(r"Z:\\Movies"), Path(r"I:\\Movies")]:
         remove_empty_dirs(folder)
