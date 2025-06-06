@@ -77,7 +77,8 @@ def get_codecs(file_path):
 def convert_file(file_path):
     new_file = file_path.with_suffix(".mp4")
     temp_file = new_file.with_name(file_path.stem + "_convert.mp4")
-    command = [
+
+    base_command = [
         FFMPEG_PATH,
         "-i", str(file_path),
         "-map", "0",
@@ -86,22 +87,40 @@ def convert_file(file_path):
         "-crf", "18",
         "-c:a", "aac",
         "-b:a", "192k",
-        "-c:s", "copy",
+        "-c:s", "mov_text",
         str(temp_file)
     ]
+
     try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        result = subprocess.run(base_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
         if result.returncode != 0:
-            logging.error(f"❌ FFmpeg error for {file_path.name}:\n{result.stderr}")
-            print(f"❌ FFmpeg error for {file_path.name}:\n{result.stderr}")
-            return "failed"
+            logging.warning(f"⚠️ Subtitle conversion failed for {file_path.name}, retrying without subtitles.")
+            print(f"⚠️ Subtitle conversion failed for {file_path.name}, retrying without subtitles.")
+            fallback_command = [
+                FFMPEG_PATH,
+                "-i", str(file_path),
+                "-map", "0:v",
+                "-map", "0:a",
+                "-c:v", "libx264",
+                "-preset", "slow",
+                "-crf", "18",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                str(temp_file)
+            ]
+            result = subprocess.run(fallback_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
+            if result.returncode != 0:
+                logging.error(f"❌ FFmpeg failed even without subtitles for {file_path.name}:\n{result.stderr}")
+                print(f"❌ FFmpeg failed even without subtitles for {file_path.name}:\n{result.stderr}")
+                return "failed"
+
         if temp_file.exists() and temp_file.stat().st_size > 1_000_000:
             file_path.unlink()
             temp_file.rename(file_path)
             logging.info(f"✅ Replaced {file_path.name} with converted MP4")
             return "converted"
         else:
-            logging.error(f"⚠️ Conversion output invalid or too small for {file_path.name}")
+            logging.error(f"⚠️ Output too small or missing for {file_path.name}")
             return "failed"
     except Exception as e:
         logging.error(f"❌ Exception during conversion of {file_path.name}: {e}")
