@@ -7,19 +7,27 @@ import os
 import json
 import shutil
 import argparse
+from typing import Tuple, List
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # Configuration
-DRY_RUN = False  # If True, simulate actions without modifying files
+DRY_RUN = True  # If True, simulate actions without modifying files
 EXTRACT_SUBTITLES = False  # Default toggle for extracting .srt subtitles
 FFMPEG_PATH = r"C:\\Programs2\\ffmpeg\\ffmpeg_essentials_build\\bin\\ffmpeg.exe"
 FFPROBE_PATH = r"C:\\Programs2\\ffmpeg\\ffmpeg_essentials_build\\bin\\ffprobe.exe"
 DEFAULT_SOURCE_FOLDERS = [Path(r"Z:\\Movies"), Path(r"Z:\\TV Shows")]
-LOG_FILE = Path("D:/Python/conversion_log.json")
+LOG_FILE = Path("D:/Python/Logs/conversion_log.json")
 
 print(f"\U0001f9ea Expected log file path: {LOG_FILE}")
+
+def clean_media_name(name: str) -> str:
+    name = re.sub(r"\.(mp4|mkv|avi|wmv|flv|mov|srt|sub)$", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\b(\d{3,4}p|4K|8K|BluRay|WEBRip|ELiTE|HDRip|HEVC|x264|AAC5|Asiimov|DDP5|10Bit|YIFY|1080p.BrRip.x|REPACK|BONE|RARBG|YTS)\b", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"[\[\(].*?[\]\)]", "", name)
+    name = re.sub(r"[_\-.,]+", " ", name)
+    return name.strip()
 
 # Load previous log if exists
 if LOG_FILE.exists():
@@ -55,7 +63,7 @@ def get_audio_codec(file_path: Path) -> str:
         logging.error(f"Error getting audio codec for {file_path}: {e}")
         return "unknown"
 
-def analyze_subtitles(file_path: Path) -> tuple[bool, list]:
+def analyze_subtitles(file_path: Path) -> Tuple[bool, List[str]]:
     try:
         result = subprocess.run(
             [FFPROBE_PATH, "-v", "error", "-select_streams", "s", "-show_entries", "stream=index,codec_name", "-of", "json", str(file_path)],
@@ -142,7 +150,8 @@ def process_mp4_audio_fix(source_folder: Path, extract_subs: bool):
         subtitle_supported, subtitle_codecs = analyze_subtitles(mp4_file)
         subtitle_status = "included" if subtitle_supported else f"skipped ({', '.join(subtitle_codecs)})"
         if codec == "aac":
-            print(f"✅ Already AAC: {mp4_file.name}")
+            if not DRY_RUN:
+                print(f"✅ Already AAC: {mp4_file.name}")
             conversion_log[file_key] = {"status": "skipped", "original_audio": "aac", "subtitles": subtitle_status}
             continue
         print(f"🔁 Converting to AAC: {mp4_file.name} (was: {codec})")
@@ -192,10 +201,30 @@ def print_summary():
             skipped += 1
         elif status == "error":
             failed += 1
-    print("\n📊 Conversion Summary:")
+    print("📊 Conversion Summary:")
     print(f"✅ Converted: {converted}")
     print(f"⏩ Skipped (already AAC): {skipped}")
     print(f"❌ Failed: {failed}")
+    conversion_log["__status__"] = "completed"
+    save_log()
+
+def rename_and_folderize(mp4_path: Path, srt_path: Path = None) -> Path:
+    new_name = clean_media_name(mp4_path.stem) + mp4_path.suffix
+    new_mp4_path = mp4_path.with_name(new_name)
+    if not DRY_RUN:
+        mp4_path.rename(new_mp4_path)
+    if EXTRACT_SUBTITLES and srt_path and not DRY_RUN:
+        new_srt_path = srt_path.with_name(clean_media_name(mp4_path.stem) + ".srt")
+        srt_path.rename(new_srt_path)
+        folder = new_mp4_path.with_suffix("")
+        folder.mkdir(exist_ok=True)
+        shutil.move(str(new_mp4_path), str(folder / new_mp4_path.name))
+        shutil.move(str(new_srt_path), str(folder / new_srt_path.name))
+        return folder / new_mp4_path.name
+    return new_mp4_path
+
+def is_log_complete():
+    return conversion_log.get("__status__") == "completed"
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Convert videos to AAC and detect compatible subtitles.")
@@ -207,6 +236,10 @@ if __name__ == "__main__":
     args = parse_args()
     if args.extract_subs:
         EXTRACT_SUBTITLES = True
+    if is_log_complete():
+        print("✅ Conversion already marked as completed. Exiting.")
+        exit(0)
+
     folders = [Path(f) for f in args.folders] if args.folders else DEFAULT_SOURCE_FOLDERS
     for folder in folders:
         process_mkv_files(folder, extract_subs=EXTRACT_SUBTITLES)
