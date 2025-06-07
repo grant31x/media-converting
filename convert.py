@@ -1,5 +1,6 @@
 # convert.py
 # This module handles the video conversion process using FFmpeg with a safe temp-file workflow.
+# UPDATED: Now saves converted files in the same directory as the source.
 
 import subprocess
 import shlex
@@ -22,7 +23,7 @@ def convert_batch(media_files: List[MediaFile], settings: ConversionSettings) ->
     """
     print("--- Starting Batch Conversion ---")
     for media in media_files:
-        # The output directory from settings is now used here for the skip check
+        # The settings object is passed for consistency, though output dir is no longer used here.
         if _should_skip_conversion(media, settings):
             continue
         
@@ -39,7 +40,7 @@ def _should_skip_conversion(media: MediaFile, settings: ConversionSettings) -> b
 
     Args:
         media: The MediaFile object to check.
-        settings: The conversion settings, used to find the output directory.
+        settings: The conversion settings (currently unused here but kept for signature consistency).
 
     Returns:
         True if the conversion should be skipped, False otherwise.
@@ -49,8 +50,8 @@ def _should_skip_conversion(media: MediaFile, settings: ConversionSettings) -> b
         media.status = "Skipped"
         return True
     
-    # Check if final file already exists in the designated output directory
-    final_output_path = settings.output_directory / media.output_filename
+    # NEW LOGIC: Check for the output file next to the source file.
+    final_output_path = media.source_path.with_suffix('.mp4')
     if final_output_path.exists():
         print(f"Skipping '{media.filename}' (destination file already exists at '{final_output_path}').")
         media.status = "Skipped (Exists)"
@@ -66,7 +67,7 @@ def _should_skip_conversion(media: MediaFile, settings: ConversionSettings) -> b
 
 def convert_media_file(media: MediaFile, settings: ConversionSettings, delete_source: bool = False):
     """
-    Converts a single media file using FFmpeg, employing a temporary file for safety.
+    Converts a single media file using FFmpeg, saving the output next to the source file.
 
     Args:
         media: The MediaFile to convert.
@@ -74,14 +75,11 @@ def convert_media_file(media: MediaFile, settings: ConversionSettings, delete_so
         delete_source: If True, the original .mkv file will be deleted upon success.
     """
     media.status = "Converting"
-    final_output_path = settings.output_directory / media.output_filename
-    # Define a temporary output file path in the same output directory.
-    temp_output_path = final_output_path.with_suffix(".temp.mp4")
+    # NEW LOGIC: The final and temporary files are now relative to the source path.
+    final_output_path = media.source_path.with_suffix(".mp4")
+    temp_output_path = media.source_path.with_suffix(".temp.mp4")
     media.destination_path = final_output_path  # The ultimate destination
 
-    # Ensure the output directory exists.
-    final_output_path.parent.mkdir(parents=True, exist_ok=True)
-    
     # Pre-cleanup: ensure no old temp file exists from a previous failed run.
     temp_output_path.unlink(missing_ok=True)
     
@@ -100,11 +98,7 @@ def convert_media_file(media: MediaFile, settings: ConversionSettings, delete_so
 
         # 2. Execute the FFmpeg command.
         subprocess.run(
-            cmd_list,
-            capture_output=True,
-            text=True,
-            encoding='utf-8',
-            check=True # Will raise CalledProcessError on non-zero exit codes.
+            cmd_list, capture_output=True, text=True, encoding='utf-8', check=True
         )
         
         # 3. VERIFY & RENAME: If successful, rename the temp file to the final name.
@@ -112,7 +106,6 @@ def convert_media_file(media: MediaFile, settings: ConversionSettings, delete_so
         print(f"  -> Renaming '{temp_output_path.name}' to '{final_output_path.name}'")
         temp_output_path.rename(final_output_path)
 
-        # Post-rename check for verification
         if not final_output_path.exists():
             raise IOError(f"Rename failed: Final file not found at '{final_output_path}'")
         else:
@@ -134,8 +127,6 @@ def convert_media_file(media: MediaFile, settings: ConversionSettings, delete_so
         media.status = "Error"
         media.error_message = f"FFmpeg failed with exit code {e.returncode}."
         print(f"  -> [ERROR] {media.error_message}")
-        # Provide full FFmpeg output for detailed debugging.
-        print(f"  -> FFmpeg stdout:\n{e.stdout}")
         print(f"  -> FFmpeg stderr:\n{e.stderr}")
         
     except Exception as e:
@@ -144,8 +135,7 @@ def convert_media_file(media: MediaFile, settings: ConversionSettings, delete_so
         print(f"  -> [ERROR] {media.error_message}")
 
     finally:
-        # RELIABLE CLEANUP: This block will run after try/except, ensuring
-        # the temp file is removed if it still exists (i.e., on failure).
+        # RELIABLE CLEANUP: This block will run after try/except, ensuring the temp file is removed on failure.
         if temp_output_path.exists():
             print(f"  -> Cleaning up partial temp file: '{temp_output_path.name}'")
             temp_output_path.unlink()
@@ -153,12 +143,10 @@ def convert_media_file(media: MediaFile, settings: ConversionSettings, delete_so
 def _build_ffmpeg_command(media: MediaFile, settings: ConversionSettings, output_path: Path) -> List[str]:
     """Constructs the full FFmpeg command, pointing to a specified output path."""
     
-    # Use -loglevel verbose for detailed logs, and -n to prevent overwriting temp file.
     command = ["ffmpeg", "-loglevel", "verbose", "-n", "-i", media.source_path]
 
     video_filters = []
     if media.burned_subtitle:
-        # Escaping for Windows paths to be correctly interpreted by the subtitles filter.
         subtitle_file_path = str(media.source_path).replace('\\', '/').replace(':', '\\:')
         video_filters.append(f"subtitles='{subtitle_file_path}':stream_index={media.burned_subtitle.index}")
     
@@ -185,8 +173,6 @@ def _build_ffmpeg_command(media: MediaFile, settings: ConversionSettings, output
             output_sub_index += 1
     
     command.extend(["-map", "0:v", "-map_metadata", "0"])
-    
-    # CRITICAL: Use the passed output path (which should be the .temp.mp4 path).
     command.append(output_path)
 
     return command
