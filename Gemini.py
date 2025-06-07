@@ -100,8 +100,9 @@ def _run_ffprobe(file_path: Path, stream_type: str) -> dict:
         or an empty dictionary if an error occurs.
     """
     try:
-        # Ensure all relevant tags are requested for subtitle streams
-        probe_entries = "stream=index,codec_name,tags=language,title,forced" if stream_type == "s" else "stream=codec_name"
+        # IMPORTANT: Added 'disposition' to probe_entries for subtitle streams.
+        # disposition contains flags like 'forced', 'default', etc.
+        probe_entries = "stream=index,codec_name,tags=language,title,forced,disposition" if stream_type == "s" else "stream=codec_name"
         command = [
             str(AppConfig.FFPROBE_PATH), "-v", "error", "-select_streams", stream_type,
             "-show_entries", probe_entries, "-of", "json", str(file_path)
@@ -179,17 +180,23 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
     for stream in all_streams:
         tags = stream.get("tags", {})
         codec = stream.get("codec_name", "")
-        is_forced_tag = tags.get("forced") == "1"
+        # Check disposition.forced first, as it's the most reliable flag
+        is_disposition_forced = stream.get("disposition", {}).get("forced") == 1 
+        is_forced_tag = tags.get("forced") == "1" # Fallback to old 'tags.forced' if disposition not present
         title = tags.get("title", "").lower()
 
         if codec in ["pgs", "hdmv_pgs_subtitle"]:
             logging.debug(f"DEBUG: Skipping PGS subtitle stream {stream.get('index')}")
             continue
 
-        if is_forced_tag:
+        if is_disposition_forced: # Prioritize disposition.forced
             forced_burn_in_idx = stream["index"]
-            logging.debug(f"DEBUG: Found explicit forced subtitle at index: {forced_burn_in_idx}")
-            break # Found the primary forced stream, no need to check further for forced
+            logging.debug(f"DEBUG: Found disposition-based forced subtitle at index: {forced_burn_in_idx}")
+            break 
+        elif is_forced_tag: # Fallback to tags.forced
+            forced_burn_in_idx = stream["index"]
+            logging.debug(f"DEBUG: Found tags-based forced subtitle at index: {forced_burn_in_idx}")
+            break
 
     # Second pass: If no explicit forced subtitle, fallback to "forced" in title
     if forced_burn_in_idx == -1:
@@ -204,26 +211,31 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
             if "forced" in title:
                 forced_burn_in_idx = stream["index"]
                 logging.debug(f"DEBUG: Found title-based forced subtitle at index: {forced_burn_in_idx}")
-                break # Assign and move on to find soft English
+                break 
 
     # Collect all English streams for soft subtitle consideration and heuristic forced
     for stream in all_streams:
         tags = stream.get("tags", {})
         codec = stream.get("codec_name", "")
         lang = tags.get("language", "").lower()
+        # Also ensure this English stream is not the one we just picked as forced
+        is_current_stream_forced_candidate = (stream.get("disposition", {}).get("forced") == 1) or \
+                                             (tags.get("forced") == "1") or \
+                                             ("forced" in tags.get("title", "").lower())
 
         if codec in ["pgs", "hdmv_pgs_subtitle"]:
             continue
 
-        if lang == "eng":
+        # Only consider truly non-forced English streams for the soft subtitle track
+        if lang == "eng" and not is_current_stream_forced_candidate:
             english_streams_candidates.append(stream["index"])
             logging.debug(f"DEBUG: Added English stream candidate: {stream['index']}")
 
     # Heuristic for forced burn-in if no explicit forced tag or title-based forced was found
+    # and we have English streams available. This assumes the *first* English stream is the forced one.
     if forced_burn_in_idx == -1 and len(english_streams_candidates) > 0:
-        # Common convention: the first English track is often the FFD (Forced Foreign Dialogue)
         forced_burn_in_idx = english_streams_candidates[0]
-        logging.debug(f"DEBUG: Heuristic: Assigning first English stream {forced_burn_in_idx} as forced burn-in.")
+        logging.debug(f"DEBUG: Heuristic: Assigning first English stream {forced_burn_in_idx} as forced burn-in (as no explicit forced found).")
 
     # Find soft English subtitle: first English track that is NOT the forced one
     # This loop ensures we find a *different* English stream for soft-coding
@@ -233,7 +245,7 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
             logging.debug(f"DEBUG: Found soft English subtitle at index: {soft_english_cc_idx}")
             break
 
-    # Final check: If only one English track and it's chosen as forced, then no separate soft track
+    # Final check: If only one relevant English track was found and used as forced, then no separate soft track
     if soft_english_cc_idx == forced_burn_in_idx:
         soft_english_cc_idx = -1 
         logging.debug("DEBUG: Forced and soft English indices are the same, clearing soft_english_cc_idx.")
