@@ -320,14 +320,11 @@ def delete_sidecar_files(original_file_path: Path):
         if f_path.exists():
             try:
                 f_path.unlink()
-                # logging.info(_format_log_message(f"🗑️ Deleted sidecar file: {f_path.name}"))
-                # Suppressed this as per user's request for clean output unless debug.
-                pass 
+                # Removed logging.info for sidecar deletion as per user's request for clean summary output.
             except OSError as e:
                 logging.warning(_format_log_message(f"⚠️ Could not delete sidecar file {f_path.name}: {e}"))
         else:
-            # logging.info(_format_log_message(f"🗑️ Sidecar file not found: {f_path.name}"))
-            # Suppressed this as per user's request for clean output unless debug.
+            # Removed logging.info for sidecar not found as per user's request for clean summary output.
             pass
 
 def move_file(src: Path, dest: Path):
@@ -445,13 +442,13 @@ def convert_to_mp4(input_file: Path) -> Dict[str, Any] | None:
         
         # Return success for already converted files, with dummy status for final summary
         return {
-            "original_name": input_file.name,
+            "original_file_path": input_file, # Added for grouping
             "output_name": output_file.name,
             "input_size_gb": input_file_size_gb,
             "output_size_gb": output_file_size_gb,
             "subtitle_status": "✅ Already Converted",
-            "video_status": "✅ Copied (Existing)",
-            "audio_status": "✅ Copied (Existing)",
+            "video_status_emoji": "✅", # Use specific emoji for "Already Converted"
+            "audio_status_emoji": "✅", # Use specific emoji for "Already Converted"
             "conversion_type": "skipped_already_converted"
         }
 
@@ -488,13 +485,13 @@ def convert_to_mp4(input_file: Path) -> Dict[str, Any] | None:
     if AppConfig.DRY_RUN:
         logging.info(_format_log_message(f"🧪 File: '{input_file.name}' - DRY-RUN ONLY. No actual conversion will occur."))
         return {
-            "original_name": input_file.name,
+            "original_file_path": input_file, # Added for grouping
             "output_name": output_file.name,
             "input_size_gb": input_file_size_gb,
             "output_size_gb": 0.0, # No output size in dry run
             "subtitle_status": ' + '.join(sub_status_parts),
-            "video_status": "📼" if video_reencoded_flag else "🎞️",
-            "audio_status": "🎶" if audio_reencoded_flag else "🎧",
+            "video_status_emoji": "📼" if video_reencoded_flag else "🎞️",
+            "audio_status_emoji": "🎶" if audio_reencoded_flag else "🎧",
             "conversion_type": "dry_run"
         }
 
@@ -520,15 +517,18 @@ def convert_to_mp4(input_file: Path) -> Dict[str, Any] | None:
             logging.info(_format_log_message(f"✅ File: '{input_file.name}' - DONE. Converted to: '{output_file.name}'"))
             output_file_size_gb = -1.0 # Indicate unknown size in summary
 
+        # Call sidecar cleanup after conversion and move, as original_file_path is needed
+        delete_sidecar_files(input_file) 
+
         # Return comprehensive details on success
         return {
-            "original_name": input_file.name,
+            "original_file_path": input_file, # Added for grouping
             "output_name": output_file.name,
             "input_size_gb": input_file_size_gb,
             "output_size_gb": output_file_size_gb,
             "subtitle_status": ' + '.join(sub_status_parts), # Keep formatted for final summary
-            "video_status": "📼" if video_reencoded_flag else "🎞️",
-            "audio_status": "🎶" if audio_reencoded_flag else "🎧",
+            "video_status_emoji": "📼" if video_reencoded_flag else "🎞️",
+            "audio_status_emoji": "🎶" if audio_reencoded_flag else "🎧",
             "conversion_type": "converted"
         }
     except FileNotFoundError:
@@ -547,7 +547,6 @@ def convert_to_mp4(input_file: Path) -> Dict[str, Any] | None:
             try:
                 temp_file.unlink()
                 # Suppressed this as per user's request for clean output.
-                # logging.info(_format_log_message(f"🗑️ Cleaned up temporary file: {temp_file.name}")) 
             except OSError as e:
                 logging.warning(_format_log_message(f"⚠️ Could not delete temporary file {temp_file.name}: {e}"))
 
@@ -693,34 +692,78 @@ def _display_final_summary(successful_conversions: list[Dict[str, Any]], failed_
     """
     Displays the final summary of all conversion operations.
     """
-    logging.info("\n--- ✨ Conversion Summary ---")
+    # Group and sort successfully converted files
+    converted_movies: list[Dict[str, Any]] = []
+    converted_tv_shows: list[Dict[str, Any]] = []
 
-    if successful_conversions:
-        logging.info("\n✅ Successfully Converted Files:")
-        for file_data in successful_conversions:
+    for file_data in successful_conversions:
+        original_path: Path = file_data["original_file_path"]
+        # Python 3.9+ original_path.is_relative_to()
+        # For compatibility with Python < 3.9, check if parent is in parents
+        if AppConfig.SOURCE_MOVIES in original_path.parents:
+            converted_movies.append(file_data)
+        elif AppConfig.SOURCE_TV in original_path.parents:
+            converted_tv_shows.append(file_data)
+        # Note: Files that were skipped (already converted) will also appear here
+
+    converted_movies.sort(key=lambda x: x["output_name"])
+    converted_tv_shows.sort(key=lambda x: x["output_name"])
+
+    # --- Start Final Summary Output ---
+    
+    if converted_movies:
+        logging.info("\n🎬 Movies:")
+        for file_data in converted_movies:
             output_name = file_data.get("output_name", "N/A")
             output_size = file_data.get("output_size_gb", -1.0)
             subtitle_status = file_data.get("subtitle_status", "N/A")
-            video_status_emoji = file_data.get("video_status", "")
-            audio_status_emoji = file_data.get("audio_status", "")
-            original_name = file_data.get("original_name", "N/A")
-
-            # Adjust output size for dry run/skipped files
+            video_status_emoji = file_data.get("video_status_emoji", "")
+            audio_status_emoji = file_data.get("audio_status_emoji", "")
+            
+            output_size_display = ""
             if file_data.get("conversion_type") == "dry_run":
-                output_size_display = "DRY RUN - No Output"
+                output_size_display = "(DRY RUN - No Output)"
             elif file_data.get("conversion_type") == "skipped_already_converted":
-                 output_size_display = f"{output_size:.2f} GB (Existing)"
+                 output_size_display = f"({output_size:.2f} GB Existing)"
             else:
-                 output_size_display = f"{output_size:.2f} GB"
+                 output_size_display = f"({output_size:.2f} GB)"
+
+            # Fixed: Use AppConfig.DRY_RUN directly for prefix
+            dry_run_prefix = "🧪 " if AppConfig.DRY_RUN else "" 
 
             logging.info(
-                f"- {original_name} -> {output_name} ({output_size_display})\n"
+                f"{dry_run_prefix}✅ {output_name} {output_size_display}\n"
                 f"  Subtitles: {subtitle_status}\n"
                 f"  Video: {video_status_emoji} {'Re-encoded' if video_status_emoji == '📼' else 'Copied'}\n"
                 f"  Audio: {audio_status_emoji} {'Re-encoded' if audio_status_emoji == '🎶' else 'Copied'}"
             )
-    else:
-        logging.info("\nNo files were successfully converted.")
+
+    if converted_tv_shows:
+        logging.info("\n📺 TV Shows:")
+        for file_data in converted_tv_shows:
+            output_name = file_data.get("output_name", "N/A")
+            output_size = file_data.get("output_size_gb", -1.0)
+            subtitle_status = file_data.get("subtitle_status", "N/A")
+            video_status_emoji = file_data.get("video_status_emoji", "")
+            audio_status_emoji = file_data.get("audio_status_emoji", "")
+            
+            output_size_display = ""
+            if file_data.get("conversion_type") == "dry_run":
+                output_size_display = "(DRY RUN - No Output)"
+            elif file_data.get("conversion_type") == "skipped_already_converted":
+                 output_size_display = f"({output_size:.2f} GB Existing)"
+            else:
+                 output_size_display = f"({output_size:.2f} GB)"
+            
+            # Fixed: Use AppConfig.DRY_RUN directly for prefix
+            dry_run_prefix = "🧪 " if AppConfig.DRY_RUN else "" 
+
+            logging.info(
+                f"{dry_run_prefix}✅ {output_name} {output_size_display}\n"
+                f"  Subtitles: {subtitle_status}\n"
+                f"  Video: {video_status_emoji} {'Re-encoded' if video_status_emoji == '📼' else 'Copied'}\n"
+                f"  Audio: {audio_status_emoji} {'Re-encoded' if audio_status_emoji == '🎶' else 'Copied'}"
+            )
 
     if failed_files:
         logging.info("\n❌ Failed Conversions:")
@@ -729,8 +772,15 @@ def _display_final_summary(successful_conversions: list[Dict[str, Any]], failed_
 
     minutes = int(total_duration_seconds // 60)
     seconds = int(total_duration_seconds % 60)
-    logging.info(f"\n⏱️ Total Conversion Time: {minutes}m {seconds}s")
-    logging.info("--- Conversion Process Completed --- 🎉")
+    total_converted = len(successful_conversions)
+    total_failed = len(failed_files)
+    
+    # Optional: Add pluralization to the summary line for clarity
+    logging.info(f"\n📦 Summary: {total_converted} file{'s' if total_converted != 1 else ''} converted | {total_failed} failed")
+    logging.info(f"⏱️ Total Time: {minutes}m {seconds}s")
+    
+    # Improve the final summary ending message
+    logging.info("\n🎉 All conversions complete. Log summary above. 🎉\n" + "-" * 50)
 
 def main():
     """
