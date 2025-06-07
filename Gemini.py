@@ -288,7 +288,7 @@ def convert_to_mp4(input_file: Path) -> bool:
     Returns:
         True if the conversion was successful, False otherwise.
     """
-    logging.info(f"🕓 [STARTING] {input_file.name} (Thread {threading.get_ident()})")
+    logging.info(f"🎬 Starting conversion of: {input_file.name} (Thread {threading.get_ident()})")
 
     output_file = input_file.with_suffix(".mp4")
     if output_file.exists():
@@ -299,9 +299,12 @@ def convert_to_mp4(input_file: Path) -> bool:
     audio_codec = get_audio_codec(input_file)
     forced_burn_in_idx, soft_english_cc_idx = get_subtitle_indices(input_file)
 
-    logging.info(f"🚀 [CONVERTING] {input_file.name}")
-    logging.info(f"🎷 Audio: {'copy' if audio_codec == 'aac' else 'AAC re-encode'}")
-    logging.info(f"📝 Subtitles: {'burned-in (idx:' + str(forced_burn_in_idx) + ')' if forced_burn_in_idx >= 0 else 'none'} + {'soft English (idx:' + str(soft_english_cc_idx) + ')' if soft_english_cc_idx >= 0 else 'no soft CC'}")
+    logging.info(f"⚙️ Processing: {input_file.name}")
+    logging.info(f"🔊 Audio: {'copy' if audio_codec == 'aac' else 'AAC re-encode'}")
+
+    sub_info = f"🔥 **Burned-in Forced Subtitles** (Stream Index: {forced_burn_in_idx})" if forced_burn_in_idx >= 0 else "🚫 No Forced Subtitles to Burn In"
+    soft_sub_info = f"💬 **Soft English Subtitles** (Stream Index: {soft_english_cc_idx})" if soft_english_cc_idx >= 0 else "❌ No Soft English Subtitles"
+    logging.info(f"📝 Subtitle Strategy: {sub_info}, {soft_sub_info}")
 
 
     if AppConfig.DRY_RUN:
@@ -317,7 +320,7 @@ def convert_to_mp4(input_file: Path) -> bool:
         result = subprocess.run(command, check=True, capture_output=True, text=True)
         shutil.move(str(temp_file), str(output_file))
         input_file.unlink() # Delete original MKV only after successful conversion and move
-        logging.info(f"✅ [DONE] {input_file.name}")
+        logging.info(f"✅ Successfully converted: {input_file.name} -> {output_file.name}")
         return True
     except FileNotFoundError:
         logging.error(f"❌ FFmpeg not found at {AppConfig.FFMPEG_PATH}. Please check your path.")
@@ -344,9 +347,9 @@ def flatten_and_clean_movies():
     Moves all converted MP4 movies from source to a flat destination directory.
     Also removes empty directories in the source movie path after files are moved.
     """
-    logging.info(f"\n--- Flattening Movies ---")
+    logging.info(f"\n--- 🎞️ Flattening Movies ---")
     mp4_files = list(AppConfig.SOURCE_MOVIES.rglob("*.mp4")) # Get all files first to count for tqdm
-    for mp4_file in tqdm(mp4_files, desc="Moving Movies", dynamic_ncols=True):
+    for mp4_file in tqdm(mp4_files, desc="🚚 Moving Movies", dynamic_ncols=True):
         dest_file = AppConfig.DEST_MOVIES / mp4_file.name
         move_file(mp4_file, dest_file)
 
@@ -366,9 +369,9 @@ def preserve_structure_tv():
     Moves all converted MP4 TV shows from source to destination, preserving
     the original directory structure.
     """
-    logging.info(f"\n--- Preserving TV Show Structure ---")
+    logging.info(f"\n--- 📺 Preserving TV Show Structure ---")
     mp4_files = list(AppConfig.SOURCE_TV.rglob("*.mp4")) # Get all files first to count for tqdm
-    for mp4_file in tqdm(mp4_files, desc="Moving TV Shows", dynamic_ncols=True):
+    for mp4_file in tqdm(mp4_files, desc="🚚 Moving TV Shows", dynamic_ncols=True):
         rel_path = mp4_file.relative_to(AppConfig.SOURCE_TV)
         dest_path = AppConfig.DEST_TV / rel_path
         move_file(mp4_file, dest_path)
@@ -380,19 +383,19 @@ def convert_all():
     """
     all_files_mkv = list(AppConfig.SOURCE_MOVIES.rglob("*.mkv")) + \
                     list(AppConfig.SOURCE_TV.rglob("*.mkv"))
-    logging.info(f"🎞️ Found {len(all_files_mkv)} MKV files to process.")
+    logging.info(f"🔍 Found {len(all_files_mkv)} MKV files to process.")
 
     # Step 1: Pre-clean filenames for all found MKV files
-    logging.info("Cleaning filenames before conversion...")
+    logging.info("✨ Cleaning filenames before conversion...")
     cleaned_files_for_conversion = []
-    for file_path in tqdm(all_files_mkv, desc="Cleaning Filenames", dynamic_ncols=True):
+    for file_path in tqdm(all_files_mkv, desc="✨ Cleaning Filenames", dynamic_ncols=True):
         cleaned_files_for_conversion.append(clean_filename(file_path))
 
     # Step 2: Perform concurrent conversion
     results = []
     with ThreadPoolExecutor(max_workers=AppConfig.MAX_WORKERS) as executor:
         futures = {executor.submit(convert_to_mp4, f): f for f in cleaned_files_for_conversion}
-        for future in tqdm(as_completed(futures), total=len(futures), desc="Converting", dynamic_ncols=True):
+        for future in tqdm(as_completed(futures), total=len(futures), desc="🔄 Converting", dynamic_ncols=True):
             file_being_processed = futures[future] # Original path (potentially cleaned) for logging
             success = future.result()
             if AppConfig.LOGGING_ENABLED:
@@ -407,11 +410,11 @@ def main():
     Initializes logging, performs conversions, and then organizes the converted files.
     """
     setup_logging()
-    logging.info("Starting media conversion process...")
+    logging.info("▶️ Starting media conversion process...")
     convert_all()
     flatten_and_clean_movies()
     preserve_structure_tv()
-    logging.info("Media conversion process completed.")
+    logging.info("🎉 Media conversion process completed.")
 
 if __name__ == "__main__":
     main()
