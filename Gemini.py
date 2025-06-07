@@ -19,6 +19,8 @@ class AppConfig:
     MAX_WORKERS: int = 3
     LOGGING_ENABLED: bool = True # Master toggle for all logging (true/false)
     DEBUG_LOGGING_ENABLED: bool = True # Toggle for DEBUG level messages. If True, INFO messages are less 'pretty'.
+    # Version tracking marker - this line is for Git detection
+    SCRIPT_VERSION: str = "2025-06-06_v5" # Minor non-functional change for Git detection
 
     # Paths to FFmpeg and FFprobe executables
     FFMPEG_PATH: Path = Path(r"C:\Programs2\ffmpeg\ffmpeg_essentials_build\bin\ffmpeg.exe")
@@ -36,10 +38,11 @@ class AppConfig:
     DEST_MOVIES: Path = Path("Z:/Movies")
     DEST_TV: Path = Path("Z:/TV Shows")
 
-    # Terms to clean from filenames (case-insensitive, whole words)
+    # Filename cleanup terms
     CLEANUP_TERMS: list[str] = [
         "1080p", "720p", "BluRay", "x264", "YTS", "BRRip", "WEBRip", "WEB-DL",
-        "HDRip", "DVDRip", "AAC", "5.1", "H264", "H265", "HEVC"
+        "HDRip", "DVDRip", "AAC", "5.1", "H264", "H265", "HEVC", # Added some new terms for Git detection
+        "DTS", "TrueHD", "Atmos", "REMUX", "AMZN", "NF", "UHD", "x265", "FHD"
     ]
 
 # --- Global Data and Locks ---
