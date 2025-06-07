@@ -192,15 +192,16 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
     Determines the indices for forced subtitles (to be burned-in) and
     English soft subtitles (for optional display) using mkvmerge metadata.
 
-    Prioritizes explicitly tagged forced subtitles. Finds the first non-forced English subtitle.
-    PGS (image-based) subtitles are skipped for both.
+    Returns a special index of -2 if any image-based subtitle (PGS, VobSub) is found,
+    signaling that the file should be skipped.
 
     Args:
         file_path: The Path object of the media file.
 
     Returns:
         A tuple containing:
-            - forced_burn_in_idx (int): Index of the first forced subtitle found (any language), or -1 if none.
+            - forced_burn_in_idx (int): Index of the first forced subtitle found (any language), or -1 if none,
+                                        or -2 if an image-based subtitle is present (indicating skip).
             - soft_english_cc_idx (int): Index of the first non-forced English subtitle found, or -1 if none.
     """
     forced_burn_in_idx = -1
@@ -211,14 +212,22 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
     mkvmerge_data = _run_media_probe(file_path, "s") # 's' indicates subtitle track request
     all_tracks = mkvmerge_data.get("tracks", [])
 
+    # Check for image-based subtitles first and exit early if found
+    for track in all_tracks:
+        if track.get("type") == "subtitles":
+            codec = track.get("properties", {}).get("codec_id", "").lower()
+            if "pgs" in codec or codec in {"s_vobsub", "s_image"}:
+                logging.warning(_format_log_message(f"⚠️ File: '{file_path.name}' contains unsupported image-based subtitle (codec: {codec}). Will skip conversion."))
+                return -2, -2 # Use -2 to signal that the file should be skipped
+
+    # If no image-based subtitles, proceed with normal detection
     # First pass: Identify the forced subtitle for burn-in (highest priority: explicit 'forced_track' flag)
     for track in all_tracks:
         if track.get("type") != "subtitles":
             continue
 
         codec = track.get("properties", {}).get("codec_id", "").lower()
-        # Fixed: Robust check for PGS/image-based codecs
-        if "pgs" in codec or codec in {"s_vobsub", "s_image"}:
+        if "pgs" in codec or codec in {"s_vobsub", "s_image"}: # Defensive check, should already be handled
             continue
 
         if track.get("properties", {}).get("forced_track") is True:
@@ -232,7 +241,7 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
             continue
 
         codec = track.get("properties", {}).get("codec_id", "").lower()
-        if "pgs" in codec or codec in {"s_vobsub", "s_image"}: # Fixed: Robust check for PGS/image-based codecs
+        if "pgs" in codec or codec in {"s_vobsub", "s_image"}: # Defensive check
             continue
 
         lang = track.get("properties", {}).get("language", "").lower()
@@ -417,17 +426,14 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
         command.extend(["-c:a", "aac", "-b:a", "640k"]) # High-quality AAC
 
     # Map video and audio streams explicitly
-    # Do NOT use -map -0:s here, as it conflicts with subsequent specific subtitle maps.
     command.extend(["-map", "0:v:0", "-map", "0:a:0"]) 
 
-    # Add soft English subtitles if found and not already burned-in
-    if soft_english_cc_idx >= 0:
+    # Add soft English subtitles mapping if detected
+    if soft_english_cc_idx >= 0 and forced_burn_in_idx == -1: # Only map soft subs if not burning anything
         command.extend(["-map", f"0:s:{soft_english_cc_idx}"])
-        # Ensure the soft subtitle is correctly set to mov_text codec for MP4 compatibility
         command.extend(["-scodec:s", "mov_text"])
-    else:
-        # If no soft English subtitles are needed, ensure no subtitle streams are output
-        command.extend(["-sn"]) # -sn: Suppress all subtitle streams in output if none are explicitly mapped
+    elif forced_burn_in_idx == -1: # If no subtitles at all are to be included
+        command.extend(["-sn"]) # -sn: Suppress all subtitle streams in output
 
     return command
 
@@ -482,6 +488,11 @@ def convert_to_mp4(input_file: Path) -> Dict[str, Any] | None:
     video_codec = get_video_codec(input_file)
     audio_codec = get_audio_codec(input_file)
     forced_burn_in_idx, soft_english_cc_idx = get_subtitle_indices(input_file)
+
+    # Check for image-based subtitle skip signal from get_subtitle_indices
+    if forced_burn_in_idx == -2: 
+        logging.info(_format_log_message(f"🚫 File: '{input_file.name}' - SKIPPED due to unsupported image-based subtitles."))
+        return None # Indicate failure for this file
 
     # Determine video re-encode status for logging
     video_reencoded_flag = False
@@ -778,7 +789,7 @@ def _display_final_summary(successful_conversions: list[Dict[str, Any]], failed_
                  size_comparison_line = f"📦 {input_size:.2f} GB → {output_size:.2f} GB"
 
             # Fixed: Use AppConfig.DRY_RUN directly for prefix
-            dry_run_prefix = "� " if AppConfig.DRY_RUN else "" 
+            dry_run_prefix = "🧪 " if AppConfig.DRY_RUN else "" 
 
             logging.info(
                 f"{dry_run_prefix}✅ {output_name} {output_size_display}\n"
