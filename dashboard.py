@@ -146,29 +146,34 @@ class SettingsWindow(QDialog):
         self.accept()
 
 class Worker(QObject):
-    finished = pyqtSignal(object); error = pyqtSignal(tuple)
-    def __init__(self, fn: Callable, *args, **kwargs):
+    finished = pyqtSignal(object)
+    error = pyqtSignal(tuple)
+
+    def __init__(self, fn: Callable, fn_kwargs: Dict[str, Any]):
         super().__init__()
-        self.fn, self.args, self.kwargs = fn, args, kwargs
+        self.fn = fn
+        self.kwargs = fn_kwargs
         self._is_cancelled = False
+
     def run(self):
         try:
-            # FIX: Only pass 'stop_check' if the target function's signature supports it.
-            # This makes the UI compatible with backend functions that may not be
-            # updated for cancellation support yet, preventing a TypeError.
+            # Check the signature of the target function.
             sig = inspect.signature(self.fn)
+            # Only add 'stop_check' to the arguments if the function expects it.
             if 'stop_check' in sig.parameters:
                 self.kwargs['stop_check'] = lambda: self._is_cancelled
             
-            result = self.fn(*self.args, **self.kwargs)
+            result = self.fn(**self.kwargs)
             if not self._is_cancelled:
                 self.finished.emit(result)
         except Exception as e:
             if not self._is_cancelled:
                 import traceback
                 self.error.emit((type(e), e, traceback.format_exc()))
+
     def cancel(self):
         self._is_cancelled = True
+
 
 class MediaFileItemWidget(QFrame):
     """A custom widget to display and manage a single media file, with multiple views."""
@@ -303,7 +308,8 @@ class Dashboard(QWidget):
         self.set_buttons_enabled(False)
         self.status_bar.showMessage(f"Running {task_function.__name__}...")
         self.thread = QThread()
-        self.worker = Worker(fn=task_function, **kwargs)
+        # FIX: Call the corrected Worker constructor
+        self.worker = Worker(fn=task_function, fn_kwargs=kwargs)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.finished.connect(on_finish)
@@ -332,7 +338,6 @@ class Dashboard(QWidget):
         all_files = []
         for dir_path in dir_paths:
             if stop_check(): break
-            # Assuming subtitlesmkv.scan_directory is updated to accept a callable 'stop_check'.
             all_files.extend(subtitlesmkv.scan_directory(Path(dir_path), stop_check=stop_check))
         return all_files
 
@@ -384,7 +389,6 @@ class Dashboard(QWidget):
         except Exception as e:
             self.show_message("Error", f"Could not create output directory.\n{e}")
             return
-        # Pass kwargs with explicit names
         self._run_task(convert.convert_batch, self.on_action_finished, media_files=files, settings=settings)
 
     def toggle_metadata_edit(self):
@@ -407,7 +411,6 @@ class Dashboard(QWidget):
         for f in files_to_move:
             setattr(f, 'is_editing_metadata', False)
         self.refresh_ui()
-        # Pass kwargs with explicit names
         self._run_task(robocopy.move_batch, self.on_action_finished, media_files=files_to_move)
     
     def on_action_finished(self, result: List[MediaFile]):
