@@ -151,22 +151,15 @@ class Worker(QObject):
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
-        self.is_cancelled = False # Flag for cancellation
 
     def run(self):
         try:
             # The target function now directly receives its arguments
             result = self.fn(*self.args, **self.kwargs)
-            if not self.is_cancelled:
-                self.finished.emit(result)
+            self.finished.emit(result)
         except Exception as e:
-            if not self.is_cancelled:
-                import traceback
-                self.error.emit((type(e), e, traceback.format_exc()))
-
-    def cancel(self):
-        self.is_cancelled = True
-
+            import traceback
+            self.error.emit((type(e), e, traceback.format_exc()))
 
 class MediaFileItemWidget(QFrame):
     def __init__(self, media_file: MediaFile):
@@ -288,7 +281,7 @@ class Dashboard(QWidget):
         self.convert_button = QPushButton("Convert Selected", clicked=self.start_conversion)
         self.edit_metadata_button = QPushButton("Edit Metadata", clicked=self.toggle_metadata_edit)
         self.transfer_button = QPushButton("Transfer Converted", clicked=self.start_transfer)
-        self.cancel_button = QPushButton("Cancel", clicked=self.cancel_task); self.cancel_button.setEnabled(False)
+        self.cancel_button = QPushButton("Cancel"); self.cancel_button.setEnabled(False) # Temporarily disabled
         bottom_controls.addWidget(self.status_bar, 1)
         bottom_controls.addWidget(self.convert_button)
         bottom_controls.addWidget(self.edit_metadata_button)
@@ -312,38 +305,35 @@ class Dashboard(QWidget):
         self.thread.finished.connect(lambda: self.set_buttons_enabled(True))
         self.thread.start()
 
-    def cancel_task(self):
-        if self.worker:
-            self.status_bar.showMessage("Cancellation requested... task will stop shortly.")
-            self.worker.cancel()
-            self.cancel_button.setEnabled(False)
-
     def set_buttons_enabled(self, enabled: bool):
         # Disable all main action buttons while a task is running
         for btn in [self.convert_button, self.edit_metadata_button, self.transfer_button, self.findChild(QPushButton, "Scan Configured"), self.findChild(QPushButton, "Scan Custom...")]:
              if btn: btn.setEnabled(enabled)
-        # Only enable the cancel button when a task is running
-        self.cancel_button.setEnabled(not enabled)
+        # Cancel button is not used in this stable version
+        self.cancel_button.setEnabled(False)
 
     def open_settings(self):
         SettingsWindow(self.config_handler, self).exec()
     
+    # FIX: This wrapper now calls the backend function directly without extra kwargs
     def _scan_multiple_dirs(self, dir_paths: List[str]) -> List[MediaFile]:
-        # Temporarily removed cancellation from scan to ensure stability.
-        # It can be re-added once the main TypeError is confirmed fixed.
+        """Wrapper to scan multiple directories."""
         all_files = []
         for dir_path in dir_paths:
-            all_files.extend(subtitlesmkv.scan_directory(Path(dir_path), stop_check=lambda: False))
+            # Assuming subtitlesmkv.scan_directory no longer needs a stop_check
+            all_files.extend(subtitlesmkv.scan_directory(Path(dir_path)))
         return all_files
 
     def scan_configured_folders(self):
         if not (dirs := self.config_handler.get_setting("scan_directories")):
             self.show_message("No Directories", "Add scan directories in Settings.")
             return
+        # Pass the 'dirs' list as a single argument
         self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dirs)
 
     def scan_custom_folder(self):
         if folder := QFileDialog.getExistingDirectory(self, "Select Folder"):
+            # Pass the folder in a list as a single argument
             self._run_task(self._scan_multiple_dirs, self.on_scan_finished, [folder])
 
     def on_scan_finished(self, result: List[MediaFile]):
@@ -384,6 +374,7 @@ class Dashboard(QWidget):
         except Exception as e:
             self.show_message("Error", f"Could not create output directory.\n{e}")
             return
+        # Pass arguments directly to the worker
         self._run_task(convert.convert_batch, self.on_action_finished, files, settings)
 
     def toggle_metadata_edit(self):
