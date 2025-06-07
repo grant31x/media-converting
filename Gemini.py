@@ -52,16 +52,20 @@ def setup_logging():
     if AppConfig.LOGGING_ENABLED:
         # Ensure log directory exists
         AppConfig.LOG_FILE_ACTIVITY.parent.mkdir(parents=True, exist_ok=True)
-        AppConfig.LOG_FILE_JSON.parent.mkdir(parents=True, exist_ok=True)
-
+  
+        # IMPORTANT: Specify encoding='utf-8' for both handlers to support emojis and wide characters.
         logging.basicConfig(
             level=logging.INFO,
             format="%(asctime)s - %(levelname)s - %(message)s",
             handlers=[
-                logging.FileHandler(AppConfig.LOG_FILE_ACTIVITY), # Log to a file
-                logging.StreamHandler() # Also log to console
+                logging.FileHandler(AppConfig.LOG_FILE_ACTIVITY, encoding='utf-8'), # Log to a file with UTF-8
+                logging.StreamHandler(os.sys.stdout) # Also log to console (using sys.stdout explicitly)
             ]
         )
+        # Ensure the console stream is also set to UTF-8
+        # This typically needs to be done directly on the stream if default is not UTF-8
+        # However, passing it to StreamHandler usually handles it. If issues persist,
+        # set PYTHONIOENCODING=utf-8 in your environment variables.
     else:
         # Disable all logging if not enabled in configuration
         logging.disable(logging.CRITICAL)
@@ -75,7 +79,9 @@ def save_log():
         return
     with conversion_log_lock:
         try:
-            with open(AppConfig.LOG_FILE_JSON, "w", encoding="utf-8") as f:
+            # Ensure the directory for the JSON log also exists
+            AppConfig.LOG_FILE_JSON.parent.mkdir(parents=True, exist_ok=True)
+            with open(AppConfig.LOG_FILE_JSON, "w", encoding="utf-8") as f: # Ensure JSON log is UTF-8
                 json.dump(conversion_log, f, indent=4)
         except Exception as e:
             logging.error(f"❌ Failed to write conversion log JSON: {e}")
@@ -98,7 +104,7 @@ def _run_ffprobe(file_path: Path, stream_type: str) -> dict:
             str(AppConfig.FFPROBE_PATH), "-v", "error", "-select_streams", stream_type,
             "-show_entries", "stream=index,codec_name,tags", "-of", "json", str(file_path)
         ]
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        result = subprocess.run(command, capture_output=True, text=True, check=True, encoding='utf-8') # Added encoding
         return json.loads(result.stdout)
     except FileNotFoundError:
         logging.error(f"❌ FFprobe not found at {AppConfig.FFPROBE_PATH}. Please check your path.")
@@ -260,7 +266,7 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
         # Properly escape path for FFmpeg subtitles filter on Windows
         input_ffmpeg_path = str(input_file).replace("\\", "/").replace(":", "\\:")
         subtitle_filter = f"subtitles='{input_ffmpeg_path}':si={forced_burn_in_idx}:force_style='FontName=Arial'"
-        command.extend(["-vf", subtitle_filter, "-c:v", "libx64", "-crf", "23", "-preset", "veryfast"])
+        command.extend(["-vf", subtitle_filter, "-c:v", "libx264", "-crf", "23", "-preset", "veryfast"]) # Changed to libx264 as libx64 is not standard
     else:
         # If no forced subtitle or if video is already H.264, copy video stream
         command.extend(["-c:v", "copy"] if video_codec == "h264" else ["-c:v", "libx264", "-crf", "23", "-preset", "veryfast"])
@@ -301,18 +307,18 @@ def convert_to_mp4(input_file: Path) -> bool:
     forced_burn_in_idx, soft_english_cc_idx = get_subtitle_indices(input_file)
 
     # Subtitle status message
-    sub_status = []
+    sub_status_parts = []
     if forced_burn_in_idx >= 0:
-        sub_status.append(f"🔥 Burned-in Forced (Index: {forced_burn_in_idx})")
+        sub_status_parts.append(f"🔥 Burned-in Forced (Index: {forced_burn_in_idx})")
     else:
-        sub_status.append("🚫 No Forced Burn-in")
+        sub_status_parts.append("🚫 No Forced Burn-in")
 
     if soft_english_cc_idx >= 0:
-        sub_status.append(f"💬 Soft English (Index: {soft_english_cc_idx})")
+        sub_status_parts.append(f"💬 Soft English (Index: {soft_english_cc_idx})")
     else:
-        sub_status.append("❌ No Soft English")
+        sub_status_parts.append("❌ No Soft English")
     
-    logging.info(f"📝 File: '{input_file.name}' - Subtitles: {' + '.join(sub_status)}")
+    logging.info(f"📝 File: '{input_file.name}' - Subtitles: {' + '.join(sub_status_parts)}")
 
     if AppConfig.DRY_RUN:
         logging.info(f"🧪 File: '{input_file.name}' - DRY-RUN ONLY. No actual conversion will occur.")
@@ -327,7 +333,8 @@ def convert_to_mp4(input_file: Path) -> bool:
 
     try:
         # Execute FFmpeg command, capturing output for detailed error logging
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
+        # Added encoding='utf-8' here for subprocess.run as well
+        result = subprocess.run(command, check=True, capture_output=True, text=True, encoding='utf-8')
         shutil.move(str(temp_file), str(output_file))
         input_file.unlink() # Delete original MKV only after successful conversion and move
         # Done message with new name
