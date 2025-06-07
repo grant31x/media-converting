@@ -1,32 +1,9 @@
-PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsApps/python3.11.exe d:/Python/media-converting/subtitlesmkv.py
---- Running subtitle scanner module in test mode ---
-
-NOTE: Creating a dummy file at '__test_mkv_folder__\my_test_movie.mkv'.
-This script requires ffprobe to be installed to work on real files.
-
-1. Scanning directory '__test_mkv_folder__'...
-Scanning directory: __test_mkv_folder__...
-  Found file: my_test_movie.mkv
-Scan complete. Found 1 MKV files.
-
-2. Results of scan:
-
-  File: my_test_movie.mkv
-    Status: Error
-    Error: ffprobe failed with exit code 1. Stderr: [matroska,webm @ 000001ff06718200] EBML header parsing failed
-__test_mkv_folder__\my_test_movie.mkv: Invalid data found when processing input
-    No subtitle tracks found or an error occurred.
-
---- Test mode finished ---
 PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsApps/python3.11.exe d:/Python/media-converting/dashboard.py
-Scanning directory: E:\Movies...
-  Found file: Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mkv
-    -> Auto-selected forced subtitle for 'Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mkv'
-Scan complete. Found 1 MKV files.
---- Starting Batch Conversion ---
-
-Processing: Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mkv
-  Command: ffmpeg -y -i 'E:\Movies\Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mkv' -vf 'subtitles='"'"'E\:/Movies/Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mkv'"'"':stream_index=2' -c:v hevc_nvenc -preset p5 -rc:v vbr_hq -cq 20 -tier high -map 0:a -c:a aac -b:a 320k -map 0:s:1 -c:s:0 mov_text -map 0:v -map_metadata 0 'converted\Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mp4'
-  -> Error: FFmpeg failed with exit code 4294967294. Error: [out#0/mp4 @ 000002712d528340] Error opening output converted\Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mp4: No such file or directory Error opening output file converted\Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mp4. Error opening output files: No such file or directory
---- Batch Conversion Finished ---
-PS D:\Python\media-converting> 
+Traceback (most recent call last):
+  File "d:\Python\media-converting\dashboard.py", line 159, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "d:\Python\media-converting\dashboard.py", line 336, in _scan_multiple_dirs
+    all_files.extend(subtitlesmkv.scan_directory(Path(dir_path), stop_check=lambda: False))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: scan_directory() got an unexpected keyword argument 'stop_check'
