@@ -16,7 +16,7 @@ class AppConfig:
     """
     Configuration settings for the media conversion script.
     """
-    DRY_RUN: bool = False # Set to False for actual conversion, True for simulation
+    DRY_RUN: bool = True # Set to False for actual conversion, True for simulation
     MAX_WORKERS: int = 3
     LOGGING_ENABLED: bool = True # Master toggle for all logging (true/false)
 
