@@ -1,12 +1,12 @@
 PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsApps/python3.11.exe d:/Python/media-converting/Gemini.py
-2025-06-06 21:15:49,338 - INFO - ▶️ Starting media conversion process...
-2025-06-06 21:15:49,340 - INFO - 🔍 Found 4 MKV files to process.
-2025-06-06 21:15:49,340 - INFO - ✨ Cleaning filenames before conversion...
-✨ Cleaning Filenames: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:00<?, ?it/s]
-2025-06-06 21:15:49,351 - INFO - ▶️ File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - STARTED (Thread 21436)
-2025-06-06 21:15:49,352 - INFO - ▶️ File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - STARTED (Thread 22132)
-2025-06-06 21:15:49,352 - INFO - ▶️ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Thread 20676)
-🔄 Converting:   0%|                                                                                                             | 0/4 [00:00<?, ?it/s]2025-06-06 21:15:49,404 - DEBUG - DEBUG: Subtitle streams for Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv: [
+2025-06-06 21:20:11,472 - INFO - ▶️ Starting media conversion process...
+2025-06-06 21:20:11,473 - INFO - 🔍 Found 4 MKV files to process.
+2025-06-06 21:20:11,473 - INFO - ✨ Cleaning filenames before conversion...
+✨ Cleaning Filenames: 100%|███████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:00<00:00, 4002.20it/s]
+2025-06-06 21:20:11,484 - INFO - ▶️ File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - STARTED (Thread 22004)
+2025-06-06 21:20:11,484 - INFO - ▶️ File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - STARTED (Thread 20368)
+2025-06-06 21:20:11,484 - INFO - ▶️ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Thread 14712)
+🔄 Converting:   0%|                                                                                                             | 0/4 [00:00<?, ?it/s]2025-06-06 21:20:11,538 - DEBUG - DEBUG: Subtitle streams for Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv: [
   {
     "index": 2,
     "codec_name": "subrip"
@@ -24,7 +24,7 @@ PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsA
     "codec_name": "subrip"
   }
 ]
-2025-06-06 21:15:49,405 - DEBUG - DEBUG: Subtitle streams for Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv: [
+2025-06-06 21:20:11,538 - DEBUG - DEBUG: Subtitle streams for Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv: [
   {
     "index": 2,
     "codec_name": "subrip"
@@ -66,13 +66,16 @@ PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsA
     "codec_name": "subrip"
   }
 ]
-2025-06-06 21:15:49,405 - DEBUG - DEBUG: Forced and soft English indices are the same, clearing soft_english_cc_idx.
-2025-06-06 21:15:49,405 - DEBUG - DEBUG: Forced and soft English indices are the same, clearing soft_english_cc_idx.
-2025-06-06 21:15:49,405 - DEBUG - DEBUG: Final subtitle indices for Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv: Forced Burn-in: -1, Soft English: -1
-2025-06-06 21:15:49,405 - DEBUG - DEBUG: Final subtitle indices for Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv: Forced Burn-in: -1, Soft English: -1
-2025-06-06 21:15:49,405 - INFO - 📝 File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
-2025-06-06 21:15:49,406 - INFO - 📝 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English   
-2025-06-06 21:15:49,406 - DEBUG - DEBUG: Subtitle streams for Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv: [
+2025-06-06 21:20:11,539 - DEBUG - DEBUG: Forced and soft English indices are the same, clearing soft_english_cc_idx.
+2025-06-06 21:20:11,539 - DEBUG - DEBUG: Forced and soft English indices are the same, clearing soft_english_cc_idx.
+2025-06-06 21:20:11,539 - DEBUG - DEBUG: Final subtitle indices for Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv: Forced Burn-in: -1, Soft English: -1
+2025-06-06 21:20:11,539 - DEBUG - DEBUG: Final subtitle indices for Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv: Forced Burn-in: -1, Soft English: -1
+2025-06-06 21:20:11,539 - INFO - 📝 File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
+2025-06-06 21:20:11,540 - INFO - 📝 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English   
+2025-06-06 21:20:11,540 - INFO - 🧪 File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.     
+2025-06-06 21:20:11,540 - INFO - 🧪 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.
+2025-06-06 21:20:11,540 - INFO - ▶️ File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Thread 22004)
+2025-06-06 21:20:11,540 - DEBUG - DEBUG: Subtitle streams for Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv: [
   {
     "index": 2,
     "codec_name": "subrip"
@@ -186,41 +189,38 @@ PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsA
     "codec_name": "hdmv_pgs_subtitle"
   }
 ]
-2025-06-06 21:15:49,406 - INFO - 🧪 File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.     
-2025-06-06 21:15:49,406 - INFO - 🧪 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.
-2025-06-06 21:15:49,407 - DEBUG - DEBUG: Skipping PGS subtitle stream 3
-2025-06-06 21:15:49,407 - INFO - ▶️ File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Thread 21436)
-2025-06-06 21:15:49,407 - DEBUG - DEBUG: Skipping PGS subtitle stream 4
-2025-06-06 21:15:49,407 - DEBUG - DEBUG: Skipping PGS subtitle stream 5
-2025-06-06 21:15:49,407 - DEBUG - DEBUG: Skipping PGS subtitle stream 6
-2025-06-06 21:15:49,407 - DEBUG - DEBUG: Skipping PGS subtitle stream 7
-2025-06-06 21:15:49,408 - DEBUG - DEBUG: Skipping PGS subtitle stream 8
-2025-06-06 21:15:49,408 - DEBUG - DEBUG: Skipping PGS subtitle stream 9
-2025-06-06 21:15:49,408 - DEBUG - DEBUG: Skipping PGS subtitle stream 10
-2025-06-06 21:15:49,408 - DEBUG - DEBUG: Skipping PGS subtitle stream 11
-2025-06-06 21:15:49,408 - DEBUG - DEBUG: Skipping PGS subtitle stream 12
-2025-06-06 21:15:49,408 - DEBUG - DEBUG: Skipping PGS subtitle stream 13
-2025-06-06 21:15:49,408 - DEBUG - DEBUG: Skipping PGS subtitle stream 14
-2025-06-06 21:15:49,408 - DEBUG - DEBUG: Skipping PGS subtitle stream 15
-2025-06-06 21:15:49,408 - DEBUG - DEBUG: Skipping PGS subtitle stream 16
-2025-06-06 21:15:49,408 - DEBUG - DEBUG: Skipping PGS subtitle stream 17
-2025-06-06 21:15:49,408 - DEBUG - DEBUG: Skipping PGS subtitle stream 18
-2025-06-06 21:15:49,409 - DEBUG - DEBUG: Skipping PGS subtitle stream 19
-2025-06-06 21:15:49,409 - DEBUG - DEBUG: Skipping PGS subtitle stream 20
-2025-06-06 21:15:49,409 - DEBUG - DEBUG: Skipping PGS subtitle stream 21
-2025-06-06 21:15:49,409 - DEBUG - DEBUG: Skipping PGS subtitle stream 22
-2025-06-06 21:15:49,409 - DEBUG - DEBUG: Skipping PGS subtitle stream 23
-2025-06-06 21:15:49,409 - DEBUG - DEBUG: Skipping PGS subtitle stream 24
-2025-06-06 21:15:49,409 - DEBUG - DEBUG: Skipping PGS subtitle stream 25
-2025-06-06 21:15:49,409 - DEBUG - DEBUG: Skipping PGS subtitle stream 26
-2025-06-06 21:15:49,409 - DEBUG - DEBUG: Skipping PGS subtitle stream 27
-2025-06-06 21:15:49,409 - DEBUG - DEBUG: Skipping PGS subtitle stream 28
-2025-06-06 21:15:49,409 - DEBUG - DEBUG: Skipping PGS subtitle stream 29
-2025-06-06 21:15:49,409 - DEBUG - DEBUG: Forced and soft English indices are the same, clearing soft_english_cc_idx.
-2025-06-06 21:15:49,409 - DEBUG - DEBUG: Final subtitle indices for Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv: Forced Burn-in: -1, Soft English: -1
-2025-06-06 21:15:49,409 - INFO - 📝 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
-2025-06-06 21:15:49,410 - INFO - 🧪 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.     
-2025-06-06 21:15:49,455 - DEBUG - DEBUG: Subtitle streams for Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv: [
+2025-06-06 21:20:11,541 - DEBUG - DEBUG: Skipping PGS subtitle stream 3
+2025-06-06 21:20:11,541 - DEBUG - DEBUG: Skipping PGS subtitle stream 4
+2025-06-06 21:20:11,541 - DEBUG - DEBUG: Skipping PGS subtitle stream 5
+2025-06-06 21:20:11,541 - DEBUG - DEBUG: Skipping PGS subtitle stream 6
+2025-06-06 21:20:11,541 - DEBUG - DEBUG: Skipping PGS subtitle stream 7
+2025-06-06 21:20:11,541 - DEBUG - DEBUG: Skipping PGS subtitle stream 8
+2025-06-06 21:20:11,542 - DEBUG - DEBUG: Skipping PGS subtitle stream 9
+2025-06-06 21:20:11,542 - DEBUG - DEBUG: Skipping PGS subtitle stream 10
+2025-06-06 21:20:11,542 - DEBUG - DEBUG: Skipping PGS subtitle stream 11
+2025-06-06 21:20:11,542 - DEBUG - DEBUG: Skipping PGS subtitle stream 12
+2025-06-06 21:20:11,542 - DEBUG - DEBUG: Skipping PGS subtitle stream 13
+2025-06-06 21:20:11,542 - DEBUG - DEBUG: Skipping PGS subtitle stream 14
+2025-06-06 21:20:11,542 - DEBUG - DEBUG: Skipping PGS subtitle stream 15
+2025-06-06 21:20:11,542 - DEBUG - DEBUG: Skipping PGS subtitle stream 16
+2025-06-06 21:20:11,542 - DEBUG - DEBUG: Skipping PGS subtitle stream 17
+2025-06-06 21:20:11,542 - DEBUG - DEBUG: Skipping PGS subtitle stream 18
+2025-06-06 21:20:11,542 - DEBUG - DEBUG: Skipping PGS subtitle stream 19
+2025-06-06 21:20:11,543 - DEBUG - DEBUG: Skipping PGS subtitle stream 20
+2025-06-06 21:20:11,543 - DEBUG - DEBUG: Skipping PGS subtitle stream 21
+2025-06-06 21:20:11,543 - DEBUG - DEBUG: Skipping PGS subtitle stream 22
+2025-06-06 21:20:11,543 - DEBUG - DEBUG: Skipping PGS subtitle stream 23
+2025-06-06 21:20:11,543 - DEBUG - DEBUG: Skipping PGS subtitle stream 24
+2025-06-06 21:20:11,543 - DEBUG - DEBUG: Skipping PGS subtitle stream 25
+2025-06-06 21:20:11,543 - DEBUG - DEBUG: Skipping PGS subtitle stream 26
+2025-06-06 21:20:11,543 - DEBUG - DEBUG: Skipping PGS subtitle stream 27
+2025-06-06 21:20:11,544 - DEBUG - DEBUG: Skipping PGS subtitle stream 28
+2025-06-06 21:20:11,544 - DEBUG - DEBUG: Skipping PGS subtitle stream 29
+2025-06-06 21:20:11,544 - DEBUG - DEBUG: Forced and soft English indices are the same, clearing soft_english_cc_idx.
+2025-06-06 21:20:11,544 - DEBUG - DEBUG: Final subtitle indices for Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv: Forced Burn-in: -1, Soft English: -1
+2025-06-06 21:20:11,544 - INFO - 📝 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
+2025-06-06 21:20:11,544 - INFO - 🧪 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.     
+2025-06-06 21:20:11,590 - DEBUG - DEBUG: Subtitle streams for Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv: [
   {
     "index": 2,
     "codec_name": "subrip"
@@ -238,18 +238,18 @@ PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsA
     "codec_name": "subrip"
   }
 ]
-2025-06-06 21:15:49,455 - DEBUG - DEBUG: Forced and soft English indices are the same, clearing soft_english_cc_idx.
-2025-06-06 21:15:49,455 - DEBUG - DEBUG: Final subtitle indices for Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv: Forced Burn-in: -1, Soft English: -1
-2025-06-06 21:15:49,455 - INFO - 📝 File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
-2025-06-06 21:15:49,455 - INFO - 🧪 File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.
-🔄 Converting: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:00<00:00, 38.31it/s] 
-2025-06-06 21:15:49,456 - INFO - 📊 Conversion Summary: Converted: 4 | ❌ Failed: 0
-2025-06-06 21:15:49,456 - INFO -
+2025-06-06 21:20:11,590 - DEBUG - DEBUG: Forced and soft English indices are the same, clearing soft_english_cc_idx.
+2025-06-06 21:20:11,590 - DEBUG - DEBUG: Final subtitle indices for Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv: Forced Burn-in: -1, Soft English: -1
+2025-06-06 21:20:11,590 - INFO - 📝 File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
+2025-06-06 21:20:11,590 - INFO - 🧪 File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.
+🔄 Converting: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:00<00:00, 37.75it/s] 
+2025-06-06 21:20:11,592 - INFO - 📊 Conversion Summary: Converted: 4 | ❌ Failed: 0
+2025-06-06 21:20:11,592 - INFO -
 --- 🎞️ Flattening Movies ---
 🚚 Moving Movies: 0it [00:00, ?it/s]
-2025-06-06 21:15:49,458 - INFO - 🧹 Cleaning up empty movie directories...
-2025-06-06 21:15:49,458 - INFO -
+2025-06-06 21:20:11,593 - INFO - 🧹 Cleaning up empty movie directories...
+2025-06-06 21:20:11,594 - INFO -
 --- 📺 Preserving TV Show Structure ---
 🚚 Moving TV Shows: 0it [00:00, ?it/s]
-2025-06-06 21:15:49,459 - INFO - 🎉 Media conversion process completed.
+2025-06-06 21:20:11,594 - INFO - 🎉 Media conversion process completed.
 PS D:\Python\media-converting>
