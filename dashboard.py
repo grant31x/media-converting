@@ -152,13 +152,18 @@ class Worker(QObject):
         self._is_cancelled = False
     def run(self):
         try:
-            # FIX: Use self._is_cancelled to match the attribute defined in __init__
-            self.kwargs['stop_flag'] = self._is_cancelled 
+            # Pass a lambda function to check the cancellation flag in real-time.
+            # This is robust and ensures the backend function gets a live value.
+            self.kwargs['stop_check'] = lambda: self._is_cancelled
             result = self.fn(*self.args, **self.kwargs)
-            if not self._is_cancelled: self.finished.emit(result)
+            if not self._is_cancelled:
+                self.finished.emit(result)
         except Exception as e:
-            if not self._is_cancelled: import traceback; self.error.emit((type(e), e, traceback.format_exc()))
-    def cancel(self): self._is_cancelled = True
+            if not self._is_cancelled:
+                import traceback
+                self.error.emit((type(e), e, traceback.format_exc()))
+    def cancel(self):
+        self._is_cancelled = True
 
 class MediaFileItemWidget(QFrame):
     """A custom widget to display and manage a single media file, with multiple views."""
@@ -191,7 +196,7 @@ class MediaFileItemWidget(QFrame):
         widget = QWidget(); summary_layout = QHBoxLayout(widget)
         self.orig_size_label = QLabel(); self.new_size_label = QLabel()
         self.size_change_label = QLabel(); self.audio_details_label = QLabel()
-        self.subs_details_label = QLabel() # NEW: for subtitle summary
+        self.subs_details_label = QLabel()
         for label in [self.orig_size_label, self.new_size_label, self.size_change_label, self.audio_details_label, self.subs_details_label]:
             summary_layout.addWidget(label); summary_layout.addStretch()
         self.stack.addWidget(widget)
@@ -209,10 +214,8 @@ class MediaFileItemWidget(QFrame):
     def refresh_state(self):
         self.status_label.setText(f"Status: {self.media_file.status}")
         current_view_index = self.stack.currentIndex()
-        
-        # Determine which view should be active
         if getattr(self.media_file, 'is_editing_metadata', False):
-            self.title_edit.setText(getattr(self.media_file, 'title', ''))
+            self.title_edit.setText(getattr(self.media_file, 'title', self.media_file.source_path.stem))
             self.media_type_combo.setCurrentText(getattr(self.media_file, 'media_type', 'Movie'))
             self.season_edit.setValue(getattr(self.media_file, 'season', 0))
             self.episode_edit.setValue(getattr(self.media_file, 'episode', 0))
@@ -245,7 +248,6 @@ class MediaFileItemWidget(QFrame):
                 self.soft_copy_checkboxes.append(cb); self.soft_copy_layout.addWidget(cb)
 
     def update_media_file_from_ui(self):
-        # Update from subtitle selection view
         if self.stack.currentIndex() == 0:
             selected_burn_track = self.burn_combo.currentData()
             self.media_file.burned_subtitle = selected_burn_track
@@ -255,7 +257,6 @@ class MediaFileItemWidget(QFrame):
                 if cb.isChecked() and (track := cb.property("track")):
                     if not (selected_burn_track and selected_burn_track.index == track.index):
                         track.action = "copy"
-        # Update from metadata editor view
         elif self.stack.currentIndex() == 2:
             setattr(self.media_file, 'title', self.title_edit.text())
             setattr(self.media_file, 'media_type', self.media_type_combo.currentText())
@@ -293,50 +294,65 @@ class Dashboard(QWidget):
         bottom_controls.addWidget(self.cancel_button)
         self.layout.addLayout(bottom_controls)
 
-    def _run_task(self, task_function: Callable, on_finish: Callable, *args):
-        self.set_buttons_enabled(False); self.status_bar.showMessage(f"Running {task_function.__name__}...")
-        self.thread = QThread(); self.worker = Worker(task_function, *args); self.worker.moveToThread(self.thread)
+    def _run_task(self, task_function: Callable, on_finish: Callable, **kwargs):
+        self.set_buttons_enabled(False)
+        self.status_bar.showMessage(f"Running {task_function.__name__}...")
+        self.thread = QThread()
+        self.worker = Worker(task_function, **kwargs)
+        self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.finished.connect(on_finish)
         self.worker.error.connect(self.on_task_error)
-        self.worker.finished.connect(self.thread.quit); self.worker.finished.connect(self.worker.deleteLater)
-        self.thread.finished.connect(self.thread.deleteLater); self.thread.finished.connect(lambda: self.set_buttons_enabled(True))
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.thread.finished.connect(lambda: self.set_buttons_enabled(True))
         self.thread.start()
 
     def cancel_task(self):
         if self.worker:
-            self.status_bar.showMessage("Cancellation requested... will stop after current file.")
+            self.status_bar.showMessage("Cancellation requested... task will stop shortly.")
             self.worker.cancel()
             self.cancel_button.setEnabled(False)
 
     def set_buttons_enabled(self, enabled: bool):
-        for btn in [self.convert_button, self.edit_metadata_button, self.transfer_button]: btn.setEnabled(enabled)
-        # Scan buttons should always be available if no task is running
-        for btn in [self.findChild(QPushButton, "Scan Configured"), self.findChild(QPushButton, "Scan Custom...")]:
+        for btn in [self.convert_button, self.edit_metadata_button, self.transfer_button, self.findChild(QPushButton, "Scan Configured"), self.findChild(QPushButton, "Scan Custom...")]:
              if btn: btn.setEnabled(enabled)
         self.cancel_button.setEnabled(not enabled)
 
-    def open_settings(self): SettingsWindow(self.config_handler, self).exec()
-    def _scan_multiple_dirs(self, dir_paths: List[str], stop_flag: bool) -> List[MediaFile]:
+    def open_settings(self):
+        SettingsWindow(self.config_handler, self).exec()
+    
+    def _scan_multiple_dirs(self, dir_paths: List[str], stop_check: Callable[[], bool]) -> List[MediaFile]:
         all_files = []
         for dir_path in dir_paths:
-            if stop_flag: break
-            # This assumes subtitlesmkv.scan_directory is updated to accept stop_flag
-            all_files.extend(subtitlesmkv.scan_directory(Path(dir_path), stop_flag=stop_flag))
+            if stop_check(): break
+            all_files.extend(subtitlesmkv.scan_directory(Path(dir_path), stop_check=stop_check))
         return all_files
+
     def scan_configured_folders(self):
-        if not (dirs := self.config_handler.get_setting("scan_directories")): self.show_message("No Directories", "Add scan directories in Settings."); return
-        self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dirs)
+        if not (dirs := self.config_handler.get_setting("scan_directories")):
+            self.show_message("No Directories", "Add scan directories in Settings.")
+            return
+        self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dir_paths=dirs)
+
     def scan_custom_folder(self):
-        if folder := QFileDialog.getExistingDirectory(self, "Select Folder"): self._run_task(self._scan_multiple_dirs, self.on_scan_finished, [folder])
+        if folder := QFileDialog.getExistingDirectory(self, "Select Folder"):
+            self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dir_paths=[folder])
+
     def on_scan_finished(self, result: List[MediaFile]):
-        self.media_files_data = result; self.populate_file_list(); self.status_bar.showMessage(f"Scan complete. Found {len(result)} files.")
+        self.media_files_data = result
+        self.populate_file_list()
+        self.status_bar.showMessage(f"Scan complete. Found {len(result)} files.")
+
     def populate_file_list(self):
         self.file_list.clear()
         for media_file in self.media_files_data:
             item_widget = MediaFileItemWidget(media_file)
-            list_item = QListWidgetItem(self.file_list); list_item.setData(Qt.ItemDataRole.UserRole, media_file)
-            list_item.setSizeHint(item_widget.sizeHint()); self.file_list.addItem(list_item)
+            list_item = QListWidgetItem(self.file_list)
+            list_item.setData(Qt.ItemDataRole.UserRole, media_file)
+            list_item.setSizeHint(item_widget.sizeHint())
+            self.file_list.addItem(list_item)
             self.file_list.setItemWidget(list_item, item_widget)
             
     def get_selected_media_files(self) -> List[MediaFile]:
@@ -354,17 +370,19 @@ class Dashboard(QWidget):
             crf=self.config_handler.get_setting("crf_value"),
             delete_source_on_success=self.config_handler.get_setting("delete_source_on_success")
         )
-        try: settings.output_directory.mkdir(parents=True, exist_ok=True)
-        except Exception as e: self.show_message("Error", f"Could not create output directory.\n{e}"); return
-        self._run_task(convert.convert_batch, self.on_action_finished, files, settings)
+        try:
+            settings.output_directory.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            self.show_message("Error", f"Could not create output directory.\n{e}"); return
+        self._run_task(convert.convert_batch, self.on_action_finished, files_to_convert=files, settings=settings)
 
     def toggle_metadata_edit(self):
         files_to_edit = self.get_selected_media_files()
-        if not files_to_edit: self.show_message("No Selection", "Select files to edit metadata for."); return
-        # Check the state of the first selected file to decide whether to enter or exit edit mode
+        if not files_to_edit:
+            self.show_message("No Selection", "Select files to edit metadata for.")
+            return
         is_entering_edit_mode = not getattr(files_to_edit[0], 'is_editing_metadata', False)
         for f in files_to_edit:
-            # If exiting edit mode, save the data from the UI
             if not is_entering_edit_mode:
                 self.file_list.itemWidget(self.find_list_item(f)).update_media_file_from_ui()
             setattr(f, 'is_editing_metadata', is_entering_edit_mode)
@@ -372,19 +390,23 @@ class Dashboard(QWidget):
 
     def start_transfer(self):
         files_to_move = [mf for mf in self.media_files_data if mf.status == "Converted"]
-        if not files_to_move: self.show_message("No Files", "No successfully converted files to transfer."); return
-        # Ensure metadata is saved before transfer
-        for f in files_to_move: setattr(f, 'is_editing_metadata', False)
+        if not files_to_move:
+            self.show_message("No Files", "No successfully converted files to transfer.")
+            return
+        for f in files_to_move:
+            setattr(f, 'is_editing_metadata', False)
         self.refresh_ui()
-        self._run_task(robocopy.move_batch, self.on_action_finished, files_to_move)
+        self._run_task(robocopy.move_batch, self.on_action_finished, media_files=files_to_move)
     
     def on_action_finished(self, result: List[MediaFile]):
-        self.refresh_ui(); self.status_bar.showMessage("Task finished successfully.")
+        self.refresh_ui()
+        self.status_bar.showMessage("Task finished successfully.")
 
     def find_list_item(self, media_file: MediaFile) -> QListWidgetItem | None:
         for i in range(self.file_list.count()):
             item = self.file_list.item(i)
-            if item.data(Qt.ItemDataRole.UserRole) == media_file: return item
+            if item.data(Qt.ItemDataRole.UserRole) == media_file:
+                return item
         return None
 
     def refresh_ui(self):
@@ -395,10 +417,18 @@ class Dashboard(QWidget):
     def on_task_error(self, error: Tuple):
         self.status_bar.showMessage(f"Error occurred: {error[1]}", 10000)
         advice = "\n\nAdvice: Missing output directory?" if "No such file or directory" in str(error[1]) else ""
-        self.show_message("Error", f"Task failed:\n{error[1]}{advice}"); print(error[2])
+        self.show_message("Error", f"Task failed:\n{error[1]}{advice}")
+        print(error[2])
 
     def show_message(self, title: str, message: str):
-        msg_box = QMessageBox(self); msg_box.setWindowTitle(title); msg_box.setText(message); msg_box.exec()
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.exec()
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv); app.setStyle("Fusion"); dashboard = Dashboard(); dashboard.show(); sys.exit(app.exec())
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    dashboard = Dashboard()
+    dashboard.show()
+    sys.exit(app.exec())
