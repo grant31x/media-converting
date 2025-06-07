@@ -1,64 +1,57 @@
-PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsApps/python3.11.exe d:/Python/media-converting/subtitles.py
-
-🎯 Subtitle Track Summary for: Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv
-------------------------------------------------------------
-ID 2: 💬 Optional | Lang: ENG | Codec: S_TEXT/UTF8     | Name: English
-ID 3: 💬 Optional | Lang: ENG | Codec: S_TEXT/UTF8     | Name: English [SDH]
-ID 4: 💬 Optional | Lang: SPA | Codec: S_TEXT/UTF8     | Name: Spanish
-ID 5: 💬 Optional | Lang: SPA | Codec: S_TEXT/UTF8     | Name: Spanish [SDH]
-
-🎯 Subtitle Track Summary for: Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv
-------------------------------------------------------------
-ID 2: 🔥 Forced | Lang: ENG | Codec: S_TEXT/UTF8     | Name: English (forced)
-ID 3: 💬 Optional | Lang: ENG | Codec: S_TEXT/UTF8     | Name: English (CC)
-ID 4: 💬 Optional | Lang: SPA | Codec: S_TEXT/UTF8     | Name: Español (Latinoamérica)
-ID 5: 💬 Optional | Lang: HEB | Codec: S_TEXT/UTF8     | Name: עברית
-ID 6: 💬 Optional | Lang: HUN | Codec: S_TEXT/UTF8     | Name: magyar
-ID 7: 💬 Optional | Lang: KOR | Codec: S_TEXT/UTF8     | Name: 한국어
-ID 8: 💬 Optional | Lang: LIT | Codec: S_TEXT/UTF8     | Name: lietuvių
-ID 9: 💬 Optional | Lang: NOR | Codec: S_TEXT/UTF8     | Name: norsk
-ID 10: 💬 Optional | Lang: POR | Codec: S_TEXT/UTF8     | Name: português (Portugal)
-ID 11: 💬 Optional | Lang: GER | Codec: S_TEXT/UTF8     | Name: Deutsch (Deutschland) (SDH)
-
-🎯 Subtitle Track Summary for: Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv
-------------------------------------------------------------
-ID 2: 💬 Optional | Lang: ENG | Codec: S_TEXT/UTF8     | Name: English-SRT
-ID 3: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 4: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 5: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 6: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 7: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 8: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 9: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 10: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 11: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 12: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 13: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 14: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 15: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 16: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 17: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 18: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 19: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 20: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 21: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 22: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 23: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 24: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 25: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 26: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 27: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 28: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-ID 29: 💬 Optional | Lang: UND | Codec: S_HDMV/PGS      | Name:
-
-🎯 Subtitle Track Summary for: Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv
-------------------------------------------------------------
-ID 2: 💬 Optional | Lang: ENG | Codec: S_TEXT/UTF8     | Name: English
-ID 3: 💬 Optional | Lang: ENG | Codec: S_TEXT/UTF8     | Name: English (CC)
-ID 4: 💬 Optional | Lang: SPA | Codec: S_TEXT/UTF8     | Name: Español (Latinoamérica)
-ID 5: 💬 Optional | Lang: FRE | Codec: S_TEXT/UTF8     | Name: Français (Canada)
-
-🎯 Subtitle Track Summary for: Rick_and_Morty_S08E02_x265-ELiTE.mkv
-------------------------------------------------------------
-ID 2: 💬 Optional | Lang: ENG | Codec: S_TEXT/UTF8     | Name:
-PS D:\Python\media-converting>
+PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsApps/python3.11.exe d:/Python/media-converting/Gemini.py
+2025-06-06 22:33:22,636 - INFO - ▶️ Starting media conversion process...
+2025-06-06 22:33:22,638 - INFO - 🔍 Found 5 MKV files to process.
+2025-06-06 22:33:22,638 - INFO - ✨ Cleaning filenames before conversion...
+✨ Cleaning Filenames: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 5/5 [00:00<?, ?it/s]
+2025-06-06 22:33:22,649 - INFO - ▶️ File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - STARTED (Input Size: 6.93 GB) (Thread 14672)
+2025-06-06 22:33:22,650 - INFO - ▶️ File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - STARTED (Input Size: 7.40 GB) (Thread 20516)
+2025-06-06 22:33:22,650 - INFO - ▶️ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Input Size: 8.36 GB) (Thread 4660)
+🔄 Converting:   0%|                                                                                                             | 0/5 [00:00<?, ?it/s]2025-06-06 22:33:22,732 - INFO - 📝 File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
+2025-06-06 22:33:22,733 - INFO - 🧪 File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.
+2025-06-06 22:33:22,733 - INFO - ▶️ File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Input Size: 5.31 GB) (Thread 14672)
+2025-06-06 22:33:22,746 - INFO - 📝 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - Subtitles: 🔥 Burned-in Forced (Index: 2) + 💬 Soft English (Index: 3)
+2025-06-06 22:33:22,746 - INFO - 🧪 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.
+2025-06-06 22:33:22,746 - INFO - ▶️ File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - STARTED (Input Size: 0.48 GB) (Thread 20516)
+2025-06-06 22:33:22,812 - INFO - 📝 File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
+2025-06-06 22:33:22,813 - INFO - 🧪 File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - DRY-RUN ONLY. No actual conversion will occur.
+2025-06-06 22:33:22,813 - INFO - 📝 File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
+2025-06-06 22:33:22,813 - INFO - 🧪 File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.
+🔄 Converting:  60%|████████████████████████████████████████████████████████████▌                                        | 3/5 [00:00<00:00, 18.60it/s]2025-06-06 22:33:22,839 - INFO - 📝 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
+2025-06-06 22:33:22,839 - INFO - 🧪 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.     
+🔄 Converting: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 5/5 [00:00<00:00, 26.56it/s] 
+2025-06-06 22:33:22,840 - INFO -
+--- 🎞️ Flattening Movies ---
+🚚 Moving Movies: 0it [00:00, ?it/s]
+2025-06-06 22:33:22,842 - INFO - 🧹 Cleaning up empty movie directories...
+2025-06-06 22:33:22,842 - INFO -
+--- 📺 Preserving TV Show Structure ---
+🚚 Moving TV Shows: 0it [00:00, ?it/s]
+2025-06-06 22:33:22,844 - INFO -
+🎬 Movies:
+2025-06-06 22:33:22,844 - INFO - 🧪 ✅ Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mp4 (DRY RUN - No Output)
+  Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
+  Video: 🎞️ Copied
+  Audio: � Copied
+2025-06-06 22:33:22,844 - INFO - 🧪 ✅ Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mp4 (DRY RUN - No Output)
+  Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
+  Video: 🎞️ Copied
+  Audio: � Copied
+2025-06-06 22:33:22,844 - INFO - 🧪 ✅ Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mp4 (DRY RUN - No Output)
+  Subtitles: 🔥 Burned-in Forced (Index: 2) + 💬 Soft English (Index: 3)
+  Video: 📼 Re-encoded
+  Audio: � Copied
+2025-06-06 22:33:22,844 - INFO - 🧪 ✅ Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mp4 (DRY RUN - No Output)
+  Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
+  Video: 🎞️ Copied
+  Audio: � Copied
+2025-06-06 22:33:22,844 - INFO -
+📺 TV Shows:
+2025-06-06 22:33:22,844 - INFO - 🧪 ✅ Rick_and_Morty_S08E02_x265-ELiTE.mp4 (DRY RUN - No Output)
+  Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
+  Video: 🎞️ Copied
+  Audio: 🎶 Re-encoded
+2025-06-06 22:33:22,844 - INFO -
+📦 Summary: 5 files converted | 0 failed
+2025-06-06 22:33:22,844 - INFO - ⏱️ Total Time: 0m 0s
+2025-06-06 22:33:22,844 - INFO -
+🎉 All conversions complete. Log summary above. 🎉
