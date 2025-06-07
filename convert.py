@@ -22,6 +22,7 @@ def convert_batch(media_files: List[MediaFile], settings: ConversionSettings) ->
     """
     print("--- Starting Batch Conversion ---")
     for media in media_files:
+        # The output directory from settings is now used here for the skip check
         if _should_skip_conversion(media, settings):
             continue
         
@@ -48,10 +49,10 @@ def _should_skip_conversion(media: MediaFile, settings: ConversionSettings) -> b
         media.status = "Skipped"
         return True
     
-    # Check if final file already exists to prevent overwriting
+    # Check if final file already exists in the designated output directory
     final_output_path = settings.output_directory / media.output_filename
     if final_output_path.exists():
-        print(f"Skipping '{media.filename}' (destination file already exists).")
+        print(f"Skipping '{media.filename}' (destination file already exists at '{final_output_path}').")
         media.status = "Skipped (Exists)"
         return True
 
@@ -74,9 +75,12 @@ def convert_media_file(media: MediaFile, settings: ConversionSettings, delete_so
     """
     media.status = "Converting"
     final_output_path = settings.output_directory / media.output_filename
-    # Define a temporary output file path.
+    # Define a temporary output file path in the same output directory.
     temp_output_path = final_output_path.with_suffix(".temp.mp4")
-    media.destination_path = final_output_path  # The ultimate destination remains the same.
+    media.destination_path = final_output_path  # The ultimate destination
+
+    # Ensure the output directory exists.
+    final_output_path.parent.mkdir(parents=True, exist_ok=True)
     
     # Pre-cleanup: ensure no old temp file exists from a previous failed run.
     temp_output_path.unlink(missing_ok=True)
@@ -86,7 +90,7 @@ def convert_media_file(media: MediaFile, settings: ConversionSettings, delete_so
         cmd_list = _build_ffmpeg_command(media, settings, temp_output_path)
         cmd_str = " ".join(shlex.quote(str(c)) for c in cmd_list)
         print(f"\nProcessing: {media.filename}")
-        print(f"  -> Writing to temp file: {temp_output_path.name}")
+        print(f"  -> Writing to temp file: {temp_output_path}")
         print(f"  Command: {cmd_str}")
 
         if settings.dry_run:
@@ -107,6 +111,12 @@ def convert_media_file(media: MediaFile, settings: ConversionSettings, delete_so
         print(f"  -> FFmpeg process completed successfully.")
         print(f"  -> Renaming '{temp_output_path.name}' to '{final_output_path.name}'")
         temp_output_path.rename(final_output_path)
+
+        # Post-rename check for verification
+        if not final_output_path.exists():
+            raise IOError(f"Rename failed: Final file not found at '{final_output_path}'")
+        else:
+            print(f"  -> [INFO] Conversion complete: {final_output_path}")
         
         media.status = "Converted"
         
@@ -116,35 +126,39 @@ def convert_media_file(media: MediaFile, settings: ConversionSettings, delete_so
             try:
                 media.source_path.unlink()
             except Exception as e:
-                print(f"  -> Warning: Failed to delete source file. Error: {e}")
+                print(f"  -> [WARN] Failed to delete source file. Error: {e}")
         else:
             print("  -> Source file preserved as per settings.")
 
     except subprocess.CalledProcessError as e:
         media.status = "Error"
-        error_details = e.stderr.strip().split('\n')[-3:] # Get last few lines of error.
-        media.error_message = f"FFmpeg failed. Error: {' '.join(error_details)}"
-        print(f"  -> Error: {media.error_message}")
-        # CLEANUP: Delete the partial temp file on failure.
-        print(f"  -> Cleaning up partial temp file: '{temp_output_path.name}'")
-        temp_output_path.unlink(missing_ok=True)
-
+        media.error_message = f"FFmpeg failed with exit code {e.returncode}."
+        print(f"  -> [ERROR] {media.error_message}")
+        # Provide full FFmpeg output for detailed debugging.
+        print(f"  -> FFmpeg stdout:\n{e.stdout}")
+        print(f"  -> FFmpeg stderr:\n{e.stderr}")
+        
     except Exception as e:
         media.status = "Error"
         media.error_message = f"An unexpected error occurred during conversion: {e}"
-        print(f"  -> Error: {media.error_message}")
-        # CLEANUP: Delete the partial temp file on failure.
-        print(f"  -> Cleaning up partial temp file: '{temp_output_path.name}'")
-        temp_output_path.unlink(missing_ok=True)
+        print(f"  -> [ERROR] {media.error_message}")
+
+    finally:
+        # RELIABLE CLEANUP: This block will run after try/except, ensuring
+        # the temp file is removed if it still exists (i.e., on failure).
+        if temp_output_path.exists():
+            print(f"  -> Cleaning up partial temp file: '{temp_output_path.name}'")
+            temp_output_path.unlink()
 
 def _build_ffmpeg_command(media: MediaFile, settings: ConversionSettings, output_path: Path) -> List[str]:
     """Constructs the full FFmpeg command, pointing to a specified output path."""
     
-    # Use -n to prevent overwriting temp file, though our script's logic should already prevent this.
-    command = ["ffmpeg", "-n", "-i", media.source_path]
+    # Use -loglevel verbose for detailed logs, and -n to prevent overwriting temp file.
+    command = ["ffmpeg", "-loglevel", "verbose", "-n", "-i", media.source_path]
 
     video_filters = []
     if media.burned_subtitle:
+        # Escaping for Windows paths to be correctly interpreted by the subtitles filter.
         subtitle_file_path = str(media.source_path).replace('\\', '/').replace(':', '\\:')
         video_filters.append(f"subtitles='{subtitle_file_path}':stream_index={media.burned_subtitle.index}")
     
