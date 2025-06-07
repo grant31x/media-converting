@@ -192,16 +192,15 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
     Determines the indices for forced subtitles (to be burned-in) and
     English soft subtitles (for optional display) using mkvmerge metadata.
 
-    Returns a special index of -2 if any image-based subtitle (PGS, VobSub) is found,
-    signaling that the file should be skipped.
+    Returns (-1,-1) if any image-based subtitle (PGS, VobSub) is found,
+    signaling that subtitles should be skipped, but video/audio conversion can proceed.
 
     Args:
         file_path: The Path object of the media file.
 
     Returns:
         A tuple containing:
-            - forced_burn_in_idx (int): Index of the first forced subtitle found (any language), or -1 if none,
-                                        or -2 if an image-based subtitle is present (indicating skip).
+            - forced_burn_in_idx (int): Index of the first forced subtitle found (any language), or -1 if none.
             - soft_english_cc_idx (int): Index of the first non-forced English subtitle found, or -1 if none.
     """
     forced_burn_in_idx = -1
@@ -212,15 +211,15 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
     mkvmerge_data = _run_media_probe(file_path, "s") # 's' indicates subtitle track request
     all_tracks = mkvmerge_data.get("tracks", [])
 
-    # Check for image-based subtitles first and exit early if found
+    # Check for image-based subtitles first and signal -1,-1 if found (skip subtitle processing)
     for track in all_tracks:
         if track.get("type") == "subtitles":
             codec = track.get("properties", {}).get("codec_id", "").lower()
             if "pgs" in codec or codec in {"s_vobsub", "s_image"}:
-                logging.warning(_format_log_message(f"⚠️ File: '{file_path.name}' contains unsupported image-based subtitle (codec: {codec}). Will skip conversion."))
-                return -2, -2 # Use -2 to signal that the file should be skipped
+                logging.warning(_format_log_message(f"⚠️ File: '{file_path.name}' contains unsupported image-based subtitle (codec: {codec}). Subtitles will be ignored."))
+                return -1, -1 # Signal no subtitles to process, but allow video/audio conversion
 
-    # If no image-based subtitles, proceed with normal detection
+    # If no image-based subtitles, proceed with normal text-based subtitle detection
     # First pass: Identify the forced subtitle for burn-in (highest priority: explicit 'forced_track' flag)
     for track in all_tracks:
         if track.get("type") != "subtitles":
@@ -428,11 +427,11 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
     # Map video and audio streams explicitly
     command.extend(["-map", "0:v:0", "-map", "0:a:0"]) 
 
-    # Add soft English subtitles mapping if detected
-    if soft_english_cc_idx >= 0 and forced_burn_in_idx == -1: # Only map soft subs if not burning anything
+    # Add soft English subtitles mapping if detected AND no forced subtitles are being burned
+    if soft_english_cc_idx >= 0 and forced_burn_in_idx == -1: 
         command.extend(["-map", f"0:s:{soft_english_cc_idx}"])
         command.extend(["-scodec:s", "mov_text"])
-    elif forced_burn_in_idx == -1: # If no subtitles at all are to be included
+    elif forced_burn_in_idx == -1 and soft_english_cc_idx == -1: # If NO subtitles (neither forced nor soft) are to be included
         command.extend(["-sn"]) # -sn: Suppress all subtitle streams in output
 
     return command
@@ -490,9 +489,10 @@ def convert_to_mp4(input_file: Path) -> Dict[str, Any] | None:
     forced_burn_in_idx, soft_english_cc_idx = get_subtitle_indices(input_file)
 
     # Check for image-based subtitle skip signal from get_subtitle_indices
-    if forced_burn_in_idx == -2: 
-        logging.info(_format_log_message(f"🚫 File: '{input_file.name}' - SKIPPED due to unsupported image-based subtitles."))
-        return None # Indicate failure for this file
+    # If forced_burn_in_idx is -1, it means either no forced subs OR image-based subs were found.
+    # The warning for image-based subs is already logged in get_subtitle_indices.
+    # We now proceed with conversion but without subtitles if image-based are present.
+    # The _build_ffmpeg_command will handle adding -sn if both indices are -1.
 
     # Determine video re-encode status for logging
     video_reencoded_flag = False
