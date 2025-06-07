@@ -4,6 +4,7 @@
 import sys
 import json
 import re
+import inspect # Added for robust worker arguments
 from pathlib import Path
 from typing import List, Callable, Tuple, Dict, Any
 
@@ -152,9 +153,13 @@ class Worker(QObject):
         self._is_cancelled = False
     def run(self):
         try:
-            # Pass a lambda function to check the cancellation flag in real-time.
-            # This is robust and ensures the backend function gets a live value.
-            self.kwargs['stop_check'] = lambda: self._is_cancelled
+            # FIX: Only pass 'stop_check' if the target function's signature supports it.
+            # This makes the UI compatible with backend functions that may not be
+            # updated for cancellation support yet, preventing a TypeError.
+            sig = inspect.signature(self.fn)
+            if 'stop_check' in sig.parameters:
+                self.kwargs['stop_check'] = lambda: self._is_cancelled
+            
             result = self.fn(*self.args, **self.kwargs)
             if not self._is_cancelled:
                 self.finished.emit(result)
@@ -298,7 +303,7 @@ class Dashboard(QWidget):
         self.set_buttons_enabled(False)
         self.status_bar.showMessage(f"Running {task_function.__name__}...")
         self.thread = QThread()
-        self.worker = Worker(task_function, **kwargs)
+        self.worker = Worker(fn=task_function, **kwargs)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.finished.connect(on_finish)
@@ -327,6 +332,7 @@ class Dashboard(QWidget):
         all_files = []
         for dir_path in dir_paths:
             if stop_check(): break
+            # Assuming subtitlesmkv.scan_directory is updated to accept a callable 'stop_check'.
             all_files.extend(subtitlesmkv.scan_directory(Path(dir_path), stop_check=stop_check))
         return all_files
 
@@ -361,8 +367,11 @@ class Dashboard(QWidget):
 
     def start_conversion(self):
         files = self.get_selected_media_files()
-        if not files: self.show_message("No Files", "No files to convert."); return
-        for f in files: self.file_list.itemWidget(self.find_list_item(f)).update_media_file_from_ui()
+        if not files:
+            self.show_message("No Files", "No files to convert.")
+            return
+        for f in files:
+            self.file_list.itemWidget(self.find_list_item(f)).update_media_file_from_ui()
         
         settings = ConversionSettings(
             output_directory=Path(self.config_handler.get_setting("output_directory")),
@@ -373,8 +382,10 @@ class Dashboard(QWidget):
         try:
             settings.output_directory.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            self.show_message("Error", f"Could not create output directory.\n{e}"); return
-        self._run_task(convert.convert_batch, self.on_action_finished, files_to_convert=files, settings=settings)
+            self.show_message("Error", f"Could not create output directory.\n{e}")
+            return
+        # Pass kwargs with explicit names
+        self._run_task(convert.convert_batch, self.on_action_finished, media_files=files, settings=settings)
 
     def toggle_metadata_edit(self):
         files_to_edit = self.get_selected_media_files()
@@ -396,6 +407,7 @@ class Dashboard(QWidget):
         for f in files_to_move:
             setattr(f, 'is_editing_metadata', False)
         self.refresh_ui()
+        # Pass kwargs with explicit names
         self._run_task(robocopy.move_batch, self.on_action_finished, media_files=files_to_move)
     
     def on_action_finished(self, result: List[MediaFile]):
