@@ -154,6 +154,7 @@ class Worker(QObject):
 
     def run(self):
         try:
+            # The target function now directly receives its arguments
             result = self.fn(*self.args, **self.kwargs)
             self.finished.emit(result)
         except Exception as e:
@@ -223,7 +224,6 @@ class MediaFileItemWidget(QFrame):
             self.subs_details_label.setText(f"Subs Burned: {burned_sub} | Copied: {copied_subs}")
             self.stack.setCurrentIndex(1)
         else:
-            # FIX: Always populate controls when in the selection view
             self.populate_selection_controls()
             self.stack.setCurrentIndex(0)
 
@@ -237,7 +237,8 @@ class MediaFileItemWidget(QFrame):
             if (child := self.soft_copy_layout.takeAt(0)).widget(): child.widget().deleteLater()
         self.soft_copy_checkboxes: list[QCheckBox] = []
         for track in self.media_file.subtitle_tracks:
-            if track.codec and track.codec.lower() in ['subrip', 'srt', 'ass', 'mov_text', 'ssa']:
+            # Check if common text-based codec names are *in* the codec string.
+            if track.codec and any(c in track.codec.lower() for c in ['srt', 'ass', 'subrip']):
                 cb = QCheckBox(track.get_display_name()); cb.setProperty("track", track)
                 self.soft_copy_checkboxes.append(cb); self.soft_copy_layout.addWidget(cb)
 
@@ -315,6 +316,7 @@ class Dashboard(QWidget):
         """Wrapper to scan multiple directories."""
         all_files = []
         for dir_path in dir_paths:
+            # NOTE: Assumes subtitlesmkv.scan_directory takes one Path argument
             all_files.extend(subtitlesmkv.scan_directory(dir_path))
         return all_files
 
