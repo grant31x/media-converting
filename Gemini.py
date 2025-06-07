@@ -29,13 +29,13 @@ class AppConfig:
 
     # Source and Destination directories for media
     SOURCE_MOVIES: Path = Path("E:/Movies")
-    SOURCE_TV: Path = Path("E:/TV Shows")
+    SOURCE_TV: Path = Path("Z:/TV Shows") # Changed to Z:/TV Shows based on typical setup
     DEST_MOVIES: Path = Path("Z:/Movies")
     DEST_TV: Path = Path("Z:/TV Shows")
 
     # Terms to clean from filenames (case-insensitive, whole words)
     CLEANUP_TERMS: list[str] = [
-        "1080p", "720p", "BluRay", "x264", "YTS", "BRRip", "WEBRip", "WEB-DL",
+        "1080p", "70p", "BluRay", "x264", "YTS", "BRRip", "WEBRip", "WEB-DL",
         "HDRip", "DVDRip", "AAC", "5.1", "H264", "H265", "HEVC"
     ]
 
@@ -100,11 +100,13 @@ def _run_ffprobe(file_path: Path, stream_type: str) -> dict:
         or an empty dictionary if an error occurs.
     """
     try:
+        # Ensure all relevant tags are requested for subtitle streams
+        probe_entries = "stream=index,codec_name,tags=language,title,forced" if stream_type == "s" else "stream=codec_name"
         command = [
             str(AppConfig.FFPROBE_PATH), "-v", "error", "-select_streams", stream_type,
-            "-show_entries", "stream=index,codec_name,tags", "-of", "json", str(file_path)
+            "-show_entries", probe_entries, "-of", "json", str(file_path)
         ]
-        result = subprocess.run(command, capture_output=True, text=True, check=True, encoding='utf-8') # Added encoding
+        result = subprocess.run(command, capture_output=True, text=True, check=True, encoding='utf-8')
         return json.loads(result.stdout)
     except FileNotFoundError:
         logging.error(f"❌ FFprobe not found at {AppConfig.FFPROBE_PATH}. Please check your path.")
@@ -166,10 +168,12 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
     """
     forced_burn_in_idx = -1
     soft_english_cc_idx = -1
-    english_streams_candidates = [] # To keep track of English streams for heuristic
+    english_streams_candidates = [] # To keep track of English streams for soft subtitle heuristic
 
     data = _run_ffprobe(file_path, "s")
     all_streams = data.get("streams", [])
+
+    logging.debug(f"DEBUG: Subtitle streams for {file_path.name}: {json.dumps(all_streams, indent=2)}")
 
     # First pass: Prioritize finding any explicitly forced subtitle (highest priority for burn-in)
     for stream in all_streams:
@@ -179,15 +183,16 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
         title = tags.get("title", "").lower()
 
         if codec in ["pgs", "hdmv_pgs_subtitle"]:
+            logging.debug(f"DEBUG: Skipping PGS subtitle stream {stream.get('index')}")
             continue
 
         if is_forced_tag:
             forced_burn_in_idx = stream["index"]
+            logging.debug(f"DEBUG: Found explicit forced subtitle at index: {forced_burn_in_idx}")
             break # Found the primary forced stream, no need to check further for forced
 
-    # Second pass: If no explicit forced subtitle, apply heuristics and find English soft tracks
+    # Second pass: If no explicit forced subtitle, fallback to "forced" in title
     if forced_burn_in_idx == -1:
-        # Fallback 1: Look for "forced" in title if no explicit 'forced' tag was found
         for stream in all_streams:
             tags = stream.get("tags", {})
             codec = stream.get("codec_name", "")
@@ -198,9 +203,10 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
 
             if "forced" in title:
                 forced_burn_in_idx = stream["index"]
+                logging.debug(f"DEBUG: Found title-based forced subtitle at index: {forced_burn_in_idx}")
                 break # Assign and move on to find soft English
 
-    # Collect all English streams for soft subtitle consideration or heuristic forced
+    # Collect all English streams for soft subtitle consideration and heuristic forced
     for stream in all_streams:
         tags = stream.get("tags", {})
         codec = stream.get("codec_name", "")
@@ -211,22 +217,28 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
 
         if lang == "eng":
             english_streams_candidates.append(stream["index"])
+            logging.debug(f"DEBUG: Added English stream candidate: {stream['index']}")
 
-    # Heuristic for forced burn-in if no explicit forced tag or title-based forced was found
+    # Heuristic for forced burn-in if no explicit or title-based forced was found
     if forced_burn_in_idx == -1 and len(english_streams_candidates) > 0:
         # Common convention: the first English track is often the FFD (Forced Foreign Dialogue)
         forced_burn_in_idx = english_streams_candidates[0]
+        logging.debug(f"DEBUG: Heuristic: Assigning first English stream {forced_burn_in_idx} as forced burn-in.")
 
     # Find soft English subtitle: first English track that is NOT the forced one
+    # This loop ensures we find a *different* English stream for soft-coding
     for eng_idx in english_streams_candidates:
         if eng_idx != forced_burn_in_idx:
             soft_english_cc_idx = eng_idx
+            logging.debug(f"DEBUG: Found soft English subtitle at index: {soft_english_cc_idx}")
             break
 
-    # Final check: If only one English track and it's chosen as forced, then no separate soft track
+    # If the only English track was picked as forced, then there's no separate soft English track
     if soft_english_cc_idx == forced_burn_in_idx:
         soft_english_cc_idx = -1 
+        logging.debug("DEBUG: Forced and soft English indices are the same, clearing soft_english_cc_idx.")
 
+    logging.debug(f"DEBUG: Final subtitle indices for {file_path.name}: Forced Burn-in: {forced_burn_in_idx}, Soft English: {soft_english_cc_idx}")
     return forced_burn_in_idx, soft_english_cc_idx
 
 # --- File Operations ---
