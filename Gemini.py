@@ -15,7 +15,7 @@ class AppConfig:
     """
     Configuration settings for the media conversion script.
     """
-    DRY_RUN: bool = True
+    DRY_RUN: bool = True # Set to False for actual conversion, True for simulation
     MAX_WORKERS: int = 3
     LOGGING_ENABLED: bool = True # Master toggle for all logging (true/false)
     DEBUG_LOGGING_ENABLED: bool = True # Toggle for DEBUG level messages. If True, INFO messages are less 'pretty'.
@@ -32,7 +32,7 @@ class AppConfig:
 
     # Source and Destination directories for media
     SOURCE_MOVIES: Path = Path("E:/Movies")
-    SOURCE_TV: Path = Path("E:/TV Shows")
+    SOURCE_TV: Path = Path("E:/TVShows")
     DEST_MOVIES: Path = Path("Z:/Movies")
     DEST_TV: Path = Path("Z:/TV Shows")
 
@@ -52,6 +52,13 @@ def setup_logging():
     Configures the logging system based on AppConfig.LOGGING_ENABLED.
     Logs messages to both a file and the console.
     """
+    # Get the root logger
+    root_logger = logging.getLogger()
+    
+    # Remove any existing handlers from the root logger to prevent duplicates or interference
+    for handler in root_logger.handlers[:]: # Iterate over a slice to modify in place
+        root_logger.removeHandler(handler)
+
     if AppConfig.LOGGING_ENABLED:
         # Ensure log directory exists
         AppConfig.LOG_FILE_ACTIVITY.parent.mkdir(parents=True, exist_ok=True)
@@ -59,30 +66,25 @@ def setup_logging():
         # Determine logging level based on DEBUG_LOGGING_ENABLED
         log_level = logging.DEBUG if AppConfig.DEBUG_LOGGING_ENABLED else logging.INFO
 
-        # Get the root logger
-        root_logger = logging.getLogger()
-        
-        # Remove any existing handlers from the root logger to prevent duplicates or interference
-        for handler in root_logger.handlers[:]: # Iterate over a slice to modify in place
-            root_logger.removeHandler(handler)
-
         # Set the root logger's level
         root_logger.setLevel(log_level)
 
-        # Create handlers with explicit levels and add them
+        # Create and add file handler
         file_handler = logging.FileHandler(AppConfig.LOG_FILE_ACTIVITY, encoding='utf-8')
         file_handler.setLevel(log_level) # Explicitly set level for file handler
         file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
         root_logger.addHandler(file_handler)
 
+        # Create and add console handler
         console_handler = logging.StreamHandler(os.sys.stdout)
         console_handler.setLevel(log_level) # Explicitly set level for console handler
         console_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
         root_logger.addHandler(console_handler)
 
     else:
-        # Disable all logging if not enabled in configuration
-        logging.disable(logging.CRITICAL)
+        # If logging is disabled, disable all log levels on the root logger
+        root_logger.setLevel(logging.CRITICAL + 1) # Set to a level higher than CRITICAL
+        logging.disable(logging.CRITICAL) # Also use the global disable function for good measure
 
 def _format_log_message(message: str) -> str:
     """
