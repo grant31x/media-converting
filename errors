@@ -1,102 +1,32 @@
-PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsApps/python3.11.exe d:/Python/media-converting/Gemini.py
-▶️ Starting media conversion process...
-🔍 Found 3 MKV files to process.
-✨ Cleaning filenames before conversion...
-✨ Cleaning Filenames: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:00<?, ?it/s]
-▶️ File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - STARTED (Input Size: 7.40 GB) (Thread 21500)
-▶️ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Input Size: 8.36 GB) (Thread 19228)
-🔄 Converting:   0%|                                                                                                             | 0/3 [00:00<?, ?it/s]▶️ File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - STARTED (Input Size: 0.48 GB) (Thread 5604)
-📝 File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
-🧪 File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - DRY-RUN ONLY. No actual conversion will occur.
-📝 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - Subtitles: 🔥 Burned-in Forced (Index: 2) + 💬 Soft English (Index: 3)
-🧪 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.
-⚠️ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' contains unsupported image-based subtitle (codec: s_hdmv/pgs). Subtitles will be ignored.
-📝 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
-🧪 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.
-🔄 Converting: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:00<00:00, 16.69it/s] 
+PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsApps/python3.11.exe d:/Python/media-converting/subtitlesmkv.py
+--- Running subtitle scanner module in test mode ---
 
---- 🎞️ Flattening Movies ---
-🚚 Moving Movies:   0%|                                                                                                          | 0/2 [00:00<?, ?it/s]�  DRY-RUN MOVE: E:\Movies\Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mp4 → Z:\Movies\Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mp4     
-🧪 DRY-RUN MOVE: E:\Movies\Alien Romulus (2024) [2160p] [4K] [WEB] [5.1] [YTS.MX]\Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mp4 → Z:\Movies\Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mp4
-🚚 Moving Movies: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:00<?, ?it/s] 
-🧹 Cleaning up empty movie directories...
+NOTE: Creating a dummy file at '__test_mkv_folder__\my_test_movie.mkv'.
+This script requires ffprobe to be installed to work on real files.
 
---- 📺 Preserving TV Show Structure ---
-🚚 Moving TV Shows: 0it [00:00, ?it/s]
+1. Scanning directory '__test_mkv_folder__'...
+Scanning directory: __test_mkv_folder__...
+  Found file: my_test_movie.mkv
+Scan complete. Found 1 MKV files.
 
-🎬 Movies:
-🧪 ✅ Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mp4 (DRY RUN - No Output)
-  🧪 Estimated: 7.40 GB → Expected: N/A GB
-  Subtitles: 🔥 Burned-in Forced (Index: 2) + 💬 Soft English (Index: 3)
-  Video: 📼 Re-encoded
-  Audio: 🎧 Copied
-🧪 ✅ Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mp4 (DRY RUN - No Output)
-  🧪 Estimated: 8.36 GB → Expected: N/A GB
-  Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
-  Video: 🎞️ Copied
-  Audio: 🎧 Copied
+2. Results of scan:
 
-📺 TV Shows:
-🧪 ✅ Rick_and_Morty_S08E02_x265-ELiTE.mp4 (DRY RUN - No Output)
-  🧪 Estimated: 0.48 GB → Expected: N/A GB
-  Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
-  Video: 🎞️ Copied
-  Audio: 🎶 Re-encoded
+  File: my_test_movie.mkv
+    Status: Error
+    Error: ffprobe failed with exit code 1. Stderr: [matroska,webm @ 000001ff06718200] EBML header parsing failed
+__test_mkv_folder__\my_test_movie.mkv: Invalid data found when processing input
+    No subtitle tracks found or an error occurred.
 
-📦 Summary: 3 files converted | 0 failed
-⏱️ Total Time: 0m 0s
+--- Test mode finished ---
+PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsApps/python3.11.exe d:/Python/media-converting/dashboard.py
+Scanning directory: E:\Movies...
+  Found file: Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mkv
+    -> Auto-selected forced subtitle for 'Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mkv'
+Scan complete. Found 1 MKV files.
+--- Starting Batch Conversion ---
 
-🎉 All conversions complete. Log summary above. 🎉
---------------------------------------------------
-PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsApps/python3.11.exe d:/Python/media-converting/Gemini.py
-▶️ Starting media conversion process...
-🔍 Found 3 MKV files to process.
-✨ Cleaning filenames before conversion...
-✨ Cleaning Filenames: 100%|███████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:00<00:00, 3000.22it/s] 
-▶️ File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - STARTED (Input Size: 7.40 GB) (Thread 20972)
-▶️ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Input Size: 8.36 GB) (Thread 18332)
-▶️ File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - STARTED (Input Size: 0.48 GB) (Thread 20228)
-🔄 Converting:   0%|                                                                                                             | 0/3 [00:00<?, ?it/s]�  File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
-🔄 File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - CONVERTING...
-❌ File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - FAILED. FFmpeg conversion error. Return Code: 4294967274
-STDOUT:
-STDERR: ffmpeg version 2024-12-04-git-2f95bc3cb3-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers
-  built with gcc 14.2.0 (Rev1, Built by MSYS2 project)
-  configuration: --enable-gpl --enable-version3 --enable-static --disable-w32threads --disable-autodetect --enable-fontconfig --enable-iconv --enable-gnutls --enable-libxml2 --enable-gmp --enable-bzlib --enable-lzma --enable-zlib --enable-libsrt --enable-libssh --enable-libzmq --enable-avisynth --enable-sdl2 --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxvid --enable-libaom --enable-libopenjpeg --enable-libvpx --enable-mediafoundation --enable-libass --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-libvidstab --enable-libvmaf --enable-libzimg --enable-amf --enable-cuda-llvm --enable-cuvid --enable-dxva2 --enable-d3d11va --enable-d3d12va --enable-ffnvcodec --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi --enable-libgme --enable-libopenmpt --enable-libopencore-amrwb --enable-libmp3lame --enable-libtheora --enable-libvo-amrwbenc --enable-libgsm --enable-libopencore-amrnb --enable-libopus --enable-libspeex --enable-libvorbis --enable-librubberband
-  libavutil      59. 47.101 / 59. 47.101
-  libavcodec     61. 26.100 / 61. 26.100
-  libavformat    61.  9.100 / 61.  9.100
-  libavdevice    61.  4.100 / 61.  4.100
-  libavfilter    10.  6.101 / 10.  6.101
-  libswscale      8. 12.100 /  8. 12.100
-  libswresample   5.  4.100 /  5.  4.100
-  libpostproc    58.  4.100 / 58.  4.100
-Input #0, matroska,webm, from 'E:\TVShows\Rick.and.Morty.S08E02.1080p.x265-ELiTE\Rick_and_Morty_S08E02_x265-ELiTE.mkv':
-  Metadata:
-    title           : Rick.and.Morty.S08E02
-    COMMENT         : ELiTE-Mon-02-Jun-2025,04:12:13,1080p,21,fast,Y,2752875,1920,1080,1.78
-    ENCODER         : Lavf61.7.100
-  Duration: 00:21:59.81, start: -0.005000, bitrate: 3144 kb/s
-  Stream #0:0: Video: hevc (Main 10), yuv420p10le(tv, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], 23.98 fps, 23.98 tbr, 1k tbn (default)
-    Metadata:
-      ENCODER         : Lavc61.19.101 libx265
-      DURATION        : 00:21:59.777000000
-  Stream #0:1(eng): Audio: ac3, 48000 Hz, 5.1(side), fltp, 448 kb/s (default)
-    Metadata:
-      ENCODER         : Lavc61.19.101 ac3
-      DURATION        : 00:21:59.808000000
-  Stream #0:2(eng): Subtitle: subrip (srt)
-    Metadata:
-      DURATION        : 00:21:56.690000000
-Stream map '' matches no streams.
-To ignore this, add a trailing '?' to the map.
-Failed to set value '0:s:2' for option 'map': Invalid argument
-Error parsing options for output file E:\TVShows\Rick.and.Morty.S08E02.1080p.x265-ELiTE\Rick_and_Morty_S08E02_x265-ELiTE.temp.mp4.
-Error opening output files: Invalid argument
-📝 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - Subtitles: 🔥 Burned-in Forced (Index: 2) + 💬 Soft English (Index: 3)
-🔄 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - CONVERTING...
-⚠️ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' contains unsupported image-based subtitle (codec: s_hdmv/pgs). Subtitles will be ignorred.
-📝 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
-🔄 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - CONVERTING...
-✅ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - DONE. Converted to: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mp4' (Output Size: 7.55 GB)
-🔄 Converting:  67%|███████████████████████████████████████████████████████████████████▎                                 | 2/3 [00:28<00:14, 14.04s/it] 
+Processing: Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mkv
+  Command: ffmpeg -y -i 'E:\Movies\Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mkv' -vf 'subtitles='"'"'E\:/Movies/Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mkv'"'"':stream_index=2' -c:v hevc_nvenc -preset p5 -rc:v vbr_hq -cq 20 -tier high -map 0:a -c:a aac -b:a 320k -map 0:s:1 -c:s:0 mov_text -map 0:v -map_metadata 0 'converted\Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mp4'
+  -> Error: FFmpeg failed with exit code 4294967294. Error: [out#0/mp4 @ 000002712d528340] Error opening output converted\Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mp4: No such file or directory Error opening output file converted\Dune.Part.Two.2024.2160p.4K.WEB.x260bit.-[.MX].mp4. Error opening output files: No such file or directory
+--- Batch Conversion Finished ---
+PS D:\Python\media-converting> 
