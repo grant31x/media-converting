@@ -18,7 +18,7 @@ class AppConfig:
     DRY_RUN: bool = True
     MAX_WORKERS: int = 3
     LOGGING_ENABLED: bool = True # Master toggle for all logging (true/false)
-    DEBUG_LOGGING_ENABLED: bool = False # Toggle for DEBUG level messages. If True, INFO messages are less 'pretty'.
+    DEBUG_LOGGING_ENABLED: bool = True # Toggle for DEBUG level messages. If True, INFO messages are less 'pretty'.
 
     # Paths to FFmpeg and FFprobe executables
     FFMPEG_PATH: Path = Path(r"C:\Programs2\ffmpeg\ffmpeg_essentials_build\bin\ffmpeg.exe")
@@ -59,15 +59,27 @@ def setup_logging():
         # Determine logging level based on DEBUG_LOGGING_ENABLED
         log_level = logging.DEBUG if AppConfig.DEBUG_LOGGING_ENABLED else logging.INFO
 
-        # IMPORTANT: Specify encoding='utf-8' for both handlers to support emojis and wide characters.
-        logging.basicConfig(
-            level=log_level, # Set level dynamically based on AppConfig
-            format="%(asctime)s - %(levelname)s - %(message)s",
-            handlers=[
-                logging.FileHandler(AppConfig.LOG_FILE_ACTIVITY, encoding='utf-8'), # Log to a file with UTF-8
-                logging.StreamHandler(os.sys.stdout) # Also log to console (using sys.stdout explicitly)
-            ]
-        )
+        # Get the root logger
+        root_logger = logging.getLogger()
+        
+        # Remove any existing handlers from the root logger to prevent duplicates or interference
+        for handler in root_logger.handlers[:]: # Iterate over a slice to modify in place
+            root_logger.removeHandler(handler)
+
+        # Set the root logger's level
+        root_logger.setLevel(log_level)
+
+        # Create handlers with explicit levels and add them
+        file_handler = logging.FileHandler(AppConfig.LOG_FILE_ACTIVITY, encoding='utf-8')
+        file_handler.setLevel(log_level) # Explicitly set level for file handler
+        file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+        root_logger.addHandler(file_handler)
+
+        console_handler = logging.StreamHandler(os.sys.stdout)
+        console_handler.setLevel(log_level) # Explicitly set level for console handler
+        console_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+        root_logger.addHandler(console_handler)
+
     else:
         # Disable all logging if not enabled in configuration
         logging.disable(logging.CRITICAL)
@@ -210,7 +222,7 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
     logging.debug(f"DEBUG: Subtitle tracks for {file_path.name} (from mkvmerge): {json.dumps(all_tracks, indent=2)}")
 
     # First pass: Identify the forced subtitle for burn-in (highest priority: explicit 'forced' flag)
-    # mkvmerge outputs `id` as the track ID and `properties.forced` as a boolean
+    # mkvmerge outputs `id` as the track ID and `properties.forced_track` as a boolean
     for track in all_tracks:
         if track.get("type") != "subtitles":
             continue
@@ -481,7 +493,7 @@ def convert_to_mp4(input_file: Path) -> bool:
         # Execute FFmpeg command, capturing output for detailed error logging
         result = subprocess.run(command, check=True, capture_output=True, text=True, encoding='utf-8')
         shutil.move(str(temp_file), str(output_file))
-        # Call sidecar cleanup before unlinking original, as original_file_path is needed
+        # Call sidecar cleanup after conversion and move, as original_file_path is needed
         delete_sidecar_files(input_file) 
 
         # Get and display output file size after successful conversion
