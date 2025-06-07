@@ -3,15 +3,63 @@ PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsA
 🔍 Found 3 MKV files to process.
 ✨ Cleaning filenames before conversion...
 ✨ Cleaning Filenames: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:00<?, ?it/s]
-▶️ File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - STARTED (Input Size: 7.40 GB) (Thread 21932)
-▶️ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Input Size: 8.36 GB) (Thread 22160)
-▶️ File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - STARTED (Input Size: 0.48 GB) (Thread 20988)
+▶️ File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - STARTED (Input Size: 7.40 GB) (Thread 21500)
+▶️ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Input Size: 8.36 GB) (Thread 19228)
+🔄 Converting:   0%|                                                                                                             | 0/3 [00:00<?, ?it/s]▶️ File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - STARTED (Input Size: 0.48 GB) (Thread 5604)
+📝 File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
+🧪 File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - DRY-RUN ONLY. No actual conversion will occur.
+📝 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - Subtitles: 🔥 Burned-in Forced (Index: 2) + 💬 Soft English (Index: 3)
+🧪 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.
+⚠️ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' contains unsupported image-based subtitle (codec: s_hdmv/pgs). Subtitles will be ignored.
+📝 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
+🧪 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.
+🔄 Converting: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:00<00:00, 16.69it/s] 
+
+--- 🎞️ Flattening Movies ---
+🚚 Moving Movies:   0%|                                                                                                          | 0/2 [00:00<?, ?it/s]�  DRY-RUN MOVE: E:\Movies\Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mp4 → Z:\Movies\Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mp4     
+🧪 DRY-RUN MOVE: E:\Movies\Alien Romulus (2024) [2160p] [4K] [WEB] [5.1] [YTS.MX]\Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mp4 → Z:\Movies\Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mp4
+🚚 Moving Movies: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:00<?, ?it/s] 
+🧹 Cleaning up empty movie directories...
+
+--- 📺 Preserving TV Show Structure ---
+🚚 Moving TV Shows: 0it [00:00, ?it/s]
+
+🎬 Movies:
+🧪 ✅ Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mp4 (DRY RUN - No Output)
+  🧪 Estimated: 7.40 GB → Expected: N/A GB
+  Subtitles: 🔥 Burned-in Forced (Index: 2) + 💬 Soft English (Index: 3)
+  Video: 📼 Re-encoded
+  Audio: 🎧 Copied
+🧪 ✅ Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mp4 (DRY RUN - No Output)
+  🧪 Estimated: 8.36 GB → Expected: N/A GB
+  Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
+  Video: 🎞️ Copied
+  Audio: 🎧 Copied
+
+📺 TV Shows:
+🧪 ✅ Rick_and_Morty_S08E02_x265-ELiTE.mp4 (DRY RUN - No Output)
+  🧪 Estimated: 0.48 GB → Expected: N/A GB
+  Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
+  Video: 🎞️ Copied
+  Audio: 🎶 Re-encoded
+
+📦 Summary: 3 files converted | 0 failed
+⏱️ Total Time: 0m 0s
+
+🎉 All conversions complete. Log summary above. 🎉
+--------------------------------------------------
+PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsApps/python3.11.exe d:/Python/media-converting/Gemini.py
+▶️ Starting media conversion process...
+🔍 Found 3 MKV files to process.
+✨ Cleaning filenames before conversion...
+✨ Cleaning Filenames: 100%|███████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:00<00:00, 3000.22it/s] 
+▶️ File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - STARTED (Input Size: 7.40 GB) (Thread 20972)
+▶️ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Input Size: 8.36 GB) (Thread 18332)
+▶️ File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - STARTED (Input Size: 0.48 GB) (Thread 20228)
 🔄 Converting:   0%|                                                                                                             | 0/3 [00:00<?, ?it/s]�  File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
 🔄 File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - CONVERTING...
-📝 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - Subtitles: 🔥 Burned-in Forced (Index: 2) + 💬 Soft English (Index: 3)
-🔄 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - CONVERTING...
 ❌ File: 'Rick_and_Morty_S08E02_x265-ELiTE.mkv' - FAILED. FFmpeg conversion error. Return Code: 4294967274
-STDOUT: 
+STDOUT:
 STDERR: ffmpeg version 2024-12-04-git-2f95bc3cb3-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers
   built with gcc 14.2.0 (Rev1, Built by MSYS2 project)
   configuration: --enable-gpl --enable-version3 --enable-static --disable-w32threads --disable-autodetect --enable-fontconfig --enable-iconv --enable-gnutls --enable-libxml2 --enable-gmp --enable-bzlib --enable-lzma --enable-zlib --enable-libsrt --enable-libssh --enable-libzmq --enable-avisynth --enable-sdl2 --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxvid --enable-libaom --enable-libopenjpeg --enable-libvpx --enable-mediafoundation --enable-libass --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-libvidstab --enable-libvmaf --enable-libzimg --enable-amf --enable-cuda-llvm --enable-cuvid --enable-dxva2 --enable-d3d11va --enable-d3d12va --enable-ffnvcodec --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi --enable-libgme --enable-libopenmpt --enable-libopencore-amrwb --enable-libmp3lame --enable-libtheora --enable-libvo-amrwbenc --enable-libgsm --enable-libopencore-amrnb --enable-libopus --enable-libspeex --enable-libvorbis --enable-librubberband
@@ -45,178 +93,10 @@ To ignore this, add a trailing '?' to the map.
 Failed to set value '0:s:2' for option 'map': Invalid argument
 Error parsing options for output file E:\TVShows\Rick.and.Morty.S08E02.1080p.x265-ELiTE\Rick_and_Morty_S08E02_x265-ELiTE.temp.mp4.
 Error opening output files: Invalid argument
-📝 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + 💬 Soft English (Index: 2)
+📝 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - Subtitles: 🔥 Burned-in Forced (Index: 2) + 💬 Soft English (Index: 3)
+🔄 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - CONVERTING...
+⚠️ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' contains unsupported image-based subtitle (codec: s_hdmv/pgs). Subtitles will be ignorred.
+📝 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
 🔄 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - CONVERTING...
-❌ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - FAILED. FFmpeg conversion error. Return Code: 4294967274
-STDOUT:
-STDERR: ffmpeg version 2024-12-04-git-2f95bc3cb3-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers
-  built with gcc 14.2.0 (Rev1, Built by MSYS2 project)
-  configuration: --enable-gpl --enable-version3 --enable-static --disable-w32threads --disable-autodetect --enable-fontconfig --enable-iconv --enable-gnutls --enable-libxml2 --enable-gmp --enable-bzlib --enable-lzma --enable-zlib --enable-libsrt --enable-libssh --enable-libzmq --enable-avisynth --enable-sdl2 --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxvid --enable-libaom --enable-libopenjpeg --enable-libvpx --enable-mediafoundation --enable-libass --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-libvidstab --enable-libvmaf --enable-libzimg --enable-amf --enable-cuda-llvm --enable-cuvid --enable-dxva2 --enable-d3d11va --enable-d3d12va --enable-ffnvcodec --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi --enable-libgme --enable-libopenmpt --enable-libopencore-amrwb --enable-libmp3lame --enable-libtheora --enable-libvo-amrwbenc --enable-libgsm --enable-libopencore-amrnb --enable-libopus --enable-libspeex --enable-libvorbis --enable-librubberband
-  libavutil      59. 47.101 / 59. 47.101
-  libavcodec     61. 26.100 / 61. 26.100
-  libavformat    61.  9.100 / 61.  9.100
-  libavdevice    61.  4.100 / 61.  4.100
-  libavfilter    10.  6.101 / 10.  6.101
-  libswscale      8. 12.100 /  8. 12.100
-  libswresample   5.  4.100 /  5.  4.100
-  libpostproc    58.  4.100 / 58.  4.100
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 3 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 4 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 5 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 6 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 7 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 8 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 9 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 10 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 11 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 12 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 13 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 14 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 15 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 16 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 17 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 18 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 19 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 20 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 21 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 22 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 23 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 24 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 25 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 26 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 27 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 28 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-[matroska,webm @ 000001ae940bf800] Could not find codec parameters for stream 29 (Subtitle: hdmv_pgs_subtitle (pgssub)): unspecified size
-Consider increasing the value for the 'analyzeduration' (0) and 'probesize' (5000000) options
-Input #0, matroska,webm, from 'E:\Movies\Interstellar (2014) [2160p] [4K] [BluRay] [5.1] [YTS.MX]\Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv':
-  Metadata:
-    ENCODER         : Lavf58.67.100
-  Duration: 02:49:04.26, start: 0.000000, bitrate: 7076 kb/s
-  Stream #0:0: Video: hevc (Main 10), yuv420p10le(tv, progressive), 3840x2160 [SAR 1:1 DAR 16:9], 23.98 fps, 23.98 tbr, 1k tbn (default)
-    Metadata:
-      ENCODER         : Lavc58.122.100 libx265
-      DURATION        : 02:49:04.261000000
-  Stream #0:1: Audio: aac (LC), 48000 Hz, 5.1, fltp (default)
-    Metadata:
-      ENCODER         : Lavc58.122.100 libfdk_aac
-      DURATION        : 02:49:04.256000000
-  Stream #0:2(eng): Subtitle: subrip (srt) (default)
-    Metadata:
-      title           : English-SRT
-      BPS-eng         : 56
-      DURATION-eng    : 02:42:27.621000000
-      NUMBER_OF_FRAMES-eng: 1906
-      NUMBER_OF_BYTES-eng: 69178
-      _STATISTICS_TAGS-eng: BPS DURATION NUMBER_OF_FRAMES NUMBER_OF_BYTES
-      DURATION        : 02:43:42.572000000
-  Stream #0:3: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:4: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:43:42.314000000
-  Stream #0:5: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:6: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:7: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:8: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:9: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:10: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:11: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:12: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:13: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:14: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:15: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:16: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:17: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:18: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:19: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:20: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:21: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:22: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:23: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:24: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:25: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:26: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:27: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:28: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:49:01.549000000
-  Stream #0:29: Subtitle: hdmv_pgs_subtitle (pgssub)
-    Metadata:
-      DURATION        : 02:42:50.887000000
-[sost#0:2/mov_text @ 000001ae940ea740] Subtitle encoding currently only possible from text to text or bitmap to bitmap
-Error opening output file E:\Movies\Interstellar (2014) [2160p] [4K] [BluRay] [5.1] [YTS.MX]\Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].temp.mp4.
-Error opening output files: Invalid argument
-🔄 Converting:  67%|███████████████████████████████████████████████████████████████████▎   
+✅ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - DONE. Converted to: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mp4' (Output Size: 7.55 GB)
+🔄 Converting:  67%|███████████████████████████████████████████████████████████████████▎                                 | 2/3 [00:28<00:14, 14.04s/it] 
