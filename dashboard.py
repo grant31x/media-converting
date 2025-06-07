@@ -152,7 +152,8 @@ class Worker(QObject):
         self._is_cancelled = False
     def run(self):
         try:
-            self.kwargs['stop_flag'] = self.is_cancelled # Pass cancel check to backend
+            # FIX: Use self._is_cancelled to match the attribute defined in __init__
+            self.kwargs['stop_flag'] = self._is_cancelled 
             result = self.fn(*self.args, **self.kwargs)
             if not self._is_cancelled: self.finished.emit(result)
         except Exception as e:
@@ -310,6 +311,9 @@ class Dashboard(QWidget):
 
     def set_buttons_enabled(self, enabled: bool):
         for btn in [self.convert_button, self.edit_metadata_button, self.transfer_button]: btn.setEnabled(enabled)
+        # Scan buttons should always be available if no task is running
+        for btn in [self.findChild(QPushButton, "Scan Configured"), self.findChild(QPushButton, "Scan Custom...")]:
+             if btn: btn.setEnabled(enabled)
         self.cancel_button.setEnabled(not enabled)
 
     def open_settings(self): SettingsWindow(self.config_handler, self).exec()
@@ -317,6 +321,7 @@ class Dashboard(QWidget):
         all_files = []
         for dir_path in dir_paths:
             if stop_flag: break
+            # This assumes subtitlesmkv.scan_directory is updated to accept stop_flag
             all_files.extend(subtitlesmkv.scan_directory(Path(dir_path), stop_flag=stop_flag))
         return all_files
     def scan_configured_folders(self):
