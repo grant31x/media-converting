@@ -17,7 +17,8 @@ class AppConfig:
     """
     DRY_RUN: bool = True
     MAX_WORKERS: int = 3
-    LOGGING_ENABLED: bool = True # Set to True to enable logging to file and console
+    LOGGING_ENABLED: bool = True # Master toggle for all logging (true/false)
+    DEBUG_LOGGING_ENABLED: bool = True # Toggle for DEBUG level messages. If True, INFO messages are less 'pretty'.
 
     # Paths to FFmpeg and FFprobe executables
     FFMPEG_PATH: Path = Path(r"C:\Programs2\ffmpeg\ffmpeg_essentials_build\bin\ffmpeg.exe")
@@ -29,7 +30,7 @@ class AppConfig:
 
     # Source and Destination directories for media
     SOURCE_MOVIES: Path = Path("E:/Movies")
-    SOURCE_TV: Path = Path("E:/TV Shows") # Reverted to original path as requested
+    SOURCE_TV: Path = Path("E:/TV Shows")
     DEST_MOVIES: Path = Path("Z:/Movies")
     DEST_TV: Path = Path("Z:/TV Shows")
 
@@ -53,22 +54,40 @@ def setup_logging():
         # Ensure log directory exists
         AppConfig.LOG_FILE_ACTIVITY.parent.mkdir(parents=True, exist_ok=True)
   
+        # Determine logging level based on DEBUG_LOGGING_ENABLED
+        log_level = logging.DEBUG if AppConfig.DEBUG_LOGGING_ENABLED else logging.INFO
+
         # IMPORTANT: Specify encoding='utf-8' for both handlers to support emojis and wide characters.
         logging.basicConfig(
-            level=logging.DEBUG, # Changed to DEBUG to show detailed logs for debugging
+            level=log_level, # Set level dynamically based on AppConfig
             format="%(asctime)s - %(levelname)s - %(message)s",
             handlers=[
                 logging.FileHandler(AppConfig.LOG_FILE_ACTIVITY, encoding='utf-8'), # Log to a file with UTF-8
                 logging.StreamHandler(os.sys.stdout) # Also log to console (using sys.stdout explicitly)
             ]
         )
-        # Ensure the console stream is also set to UTF-8
-        # This typically needs to be done directly on the stream if default is not UTF-8
-        # However, passing it to StreamHandler usually handles it. If issues persist,
-        # set PYTHONIOENCODING=utf-8 in your environment variables.
     else:
         # Disable all logging if not enabled in configuration
         logging.disable(logging.CRITICAL)
+
+def _format_log_message(message: str) -> str:
+    """
+    Formats log messages by conditionally removing emojis based on DEBUG_LOGGING_ENABLED.
+    """
+    if AppConfig.DEBUG_LOGGING_ENABLED:
+        # Regex to remove most common emojis
+        emoji_pattern = re.compile(
+            "["
+            "\U0001F600-\U0001F64F"  # emoticons
+            "\U0001F300-\U0001F5FF"  # symbols & pictographs
+            "\U0001F680-\U0001F6FF"  # transport & map symbols
+            "\U0001F1E0-\U0001F1FF"  # flags (iOS)
+            "\U00002702-\U000027B0"
+            "\U000024C2-\U0001F251"
+            "]+", flags=re.UNICODE
+        )
+        return emoji_pattern.sub(r'', message).strip()
+    return message # Return original message with emojis if not in debug mode
 
 def save_log():
     """
@@ -110,16 +129,16 @@ def _run_ffprobe(file_path: Path, stream_type: str) -> dict:
         result = subprocess.run(command, capture_output=True, text=True, check=True, encoding='utf-8')
         return json.loads(result.stdout)
     except FileNotFoundError:
-        logging.error(f"❌ FFprobe not found at {AppConfig.FFPROBE_PATH}. Please check your path.")
+        logging.error(_format_log_message(f"❌ FFprobe not found at {AppConfig.FFPROBE_PATH}. Please check your path."))
         return {"streams": []}
     except subprocess.CalledProcessError as e:
-        logging.warning(f"⚠️ FFprobe command failed for {file_path.name} ({stream_type}): {e.stderr.strip()}")
+        logging.warning(_format_log_message(f"⚠️ FFprobe command failed for {file_path.name} ({stream_type}): {e.stderr.strip()}"))
         return {"streams": []}
     except (json.JSONDecodeError, IndexError) as e:
-        logging.warning(f"⚠️ Failed to parse FFprobe output for {file_path.name} ({stream_type}): {e}")
+        logging.warning(_format_log_message(f"⚠️ Failed to parse FFprobe output for {file_path.name} ({stream_type}): {e}"))
         return {"streams": []}
     except Exception as e:
-        logging.warning(f"⚠️ An unexpected error occurred with FFprobe for {file_path.name}: {e}")
+        logging.warning(_format_log_message(f"⚠️ An unexpected error occurred with FFprobe for {file_path.name}: {e}"))
         return {"streams": []}
 
 def get_audio_codec(file_path: Path) -> str:
@@ -286,11 +305,43 @@ def clean_filename(file_path: Path) -> Path:
     if new_path != file_path:
         try:
             file_path.rename(new_path)
-            logging.info(f"✨ Renamed {file_path.name} to {new_path.name}")
+            logging.info(_format_log_message(f"✨ Renamed {file_path.name} to {new_path.name}"))
             return new_path # Return the new path if renamed
         except OSError as e: # Catch OSError for file system operations
-            logging.warning(f"⚠️ Could not rename {file_path.name} to {new_path.name}: {e}")
+            logging.warning(_format_log_message(f"⚠️ Could not rename {file_path.name} to {new_path.name}: {e}"))
     return file_path # Return original path if not renamed or on error
+
+def delete_sidecar_files(original_file_path: Path):
+    """
+    Deletes common metadata and subtitle sidecar files associated with an original MKV file.
+    Also deletes the original MKV file itself after successful conversion.
+    This function is optional and respects DRY_RUN.
+
+    Args:
+        original_file_path: The Path object of the original MKV file (before conversion).
+    """
+    if AppConfig.DRY_RUN:
+        logging.info(_format_log_message(f"🧪 DRY-RUN CLEANUP: Skipping deletion of sidecar files for {original_file_path.name}"))
+        return
+
+    # Files to consider for deletion (based on original MKV name)
+    files_to_delete = [
+        original_file_path,  # The original MKV file itself
+        original_file_path.with_suffix('.nfo'),
+        original_file_path.with_suffix('.srt'),
+        # Add other common sidecar extensions here if needed, e.g., .idx, .sub, .ass
+    ]
+
+    logging.debug(f"DEBUG: Attempting to clean sidecar files for {original_file_path.name}")
+    for f_path in files_to_delete:
+        if f_path.exists():
+            try:
+                f_path.unlink()
+                logging.info(_format_log_message(f"🗑️ Deleted sidecar file: {f_path.name}"))
+            except OSError as e:
+                logging.warning(_format_log_message(f"⚠️ Could not delete sidecar file {f_path.name}: {e}"))
+        else:
+            logging.debug(f"DEBUG: Sidecar file not found: {f_path.name}")
 
 def move_file(src: Path, dest: Path):
     """
@@ -302,14 +353,14 @@ def move_file(src: Path, dest: Path):
         dest: The destination Path object where the file should be moved.
     """
     if AppConfig.DRY_RUN:
-        logging.info(f"🧪 DRY-RUN MOVE: {src} → {dest}")
+        logging.info(_format_log_message(f"🧪 DRY-RUN MOVE: {src} → {dest}"))
         return
     try:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(dest))
-        logging.info(f"🚚 Moved: {src.name} to {dest}")
+        logging.info(_format_log_message(f"🚚 Moved: {src.name} to {dest}"))
     except Exception as e:
-        logging.error(f"❌ Failed to move {src.name} to {dest}: {e}")
+        logging.error(_format_log_message(f"❌ Failed to move {src.name} to {dest}: {e}"))
 
 # --- Conversion Logic ---
 def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, forced_burn_in_idx: int, soft_english_cc_idx: int) -> list[str]:
@@ -328,25 +379,47 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
     """
     command = [str(AppConfig.FFMPEG_PATH), "-y", "-i", str(input_file)]
 
-    # Video encoding strategy
+    # VIDEO ENCODING STRATEGY:
+    # 1. If forced subtitles are burned, video MUST be re-encoded. Re-encode to H.265 for 4K efficiency.
+    # 2. If no forced subtitles, prefer copying existing H.265 or H.264.
+    # 3. Otherwise (e.g., non-HEVC/H264 video, no forced subs), re-encode to H.265.
+
+    video_reencode_needed = False
     if forced_burn_in_idx >= 0:
-        # Properly escape path for FFmpeg subtitles filter on Windows
+        video_reencode_needed = True
+        logging.debug(f"DEBUG: Video re-encode needed for {input_file.name} due to forced subtitles.")
+
+    if video_reencode_needed:
         input_ffmpeg_path = str(input_file).replace("\\", "/").replace(":", "\\:")
         subtitle_filter = f"subtitles='{input_ffmpeg_path}':si={forced_burn_in_idx}:force_style='FontName=Arial'"
-        command.extend(["-vf", subtitle_filter, "-c:v", "libx264", "-crf", "23", "-preset", "veryfast"]) 
+        command.extend(["-vf", subtitle_filter, "-c:v", "libx265", "-crf", "28", "-preset", "medium"])
+        logging.debug(f"DEBUG: Video will be re-encoded to H.265 with burn-in for {input_file.name}.")
+    elif video_codec == "hevc":
+        command.extend(["-c:v", "copy"])
+        logging.debug(f"DEBUG: Video (HEVC) will be copied for {input_file.name}.")
+    elif video_codec == "h264":
+        command.extend(["-c:v", "copy"])
+        logging.debug(f"DEBUG: Video (H.264) will be copied for {input_file.name}.")
     else:
-        # If no forced subtitle or if video is already H.264, copy video stream
-        command.extend(["-c:v", "copy"] if video_codec == "h264" else ["-c:v", "libx264", "-crf", "23", "-preset", "veryfast"])
+        # Catch other less common video codecs and re-encode to H.265
+        command.extend(["-c:v", "libx265", "-crf", "28", "-preset", "medium"])
+        logging.debug(f"DEBUG: Video (unknown codec '{video_codec}') will be re-encoded to H.265 for {input_file.name}.")
 
-    # Audio encoding strategy
-    command.extend(["-c:a", "copy"] if audio_codec == "aac" else ["-c:a", "aac", "-b:a", "384k"])
+    # AUDIO ENCODING STRATEGY: Always output AAC (640k)
+    if audio_codec == "aac": # If source is already AAC, copy it
+        command.extend(["-c:a", "copy"])
+        logging.debug(f"DEBUG: Audio (AAC) will be copied for {input_file.name}.")
+    else: # Re-encode all other audio formats to high-quality AAC
+        command.extend(["-c:a", "aac", "-b:a", "640k"]) # High-quality AAC
+        logging.debug(f"DEBUG: Audio (unknown codec '{audio_codec}') will be re-encoded to AAC 640k for {input_file.name}.")
 
     # Map video and audio streams
     command.extend(["-map", "0:v:0", "-map", "0:a:0"])
 
-    # Add soft English subtitles if found and not already burned-in (though current logic keeps them separate)
+    # Add soft English subtitles if found and not already burned-in
     if soft_english_cc_idx >= 0:
         command.extend(["-map", f"0:s:{soft_english_cc_idx}", "-scodec:s", "mov_text"])
+        logging.debug(f"DEBUG: Soft English subtitles (index {soft_english_cc_idx}) will be included for {input_file.name}.")
 
     return command
 
@@ -361,12 +434,29 @@ def convert_to_mp4(input_file: Path) -> bool:
     Returns:
         True if the conversion was successful, False otherwise.
     """
-    # File started message
-    logging.info(f"▶️ File: '{input_file.name}' - STARTED (Thread {threading.get_ident()})")
+    input_file_size_bytes = 0
+    try:
+        input_file_size_bytes = input_file.stat().st_size
+        input_file_size_gb = input_file_size_bytes / (1024**3)
+        logging.info(_format_log_message(f"▶️ File: '{input_file.name}' - STARTED (Input Size: {input_file_size_gb:.2f} GB) (Thread {threading.get_ident()})"))
+    except FileNotFoundError:
+        logging.error(_format_log_message(f"❌ File: '{input_file.name}' not found. Skipping conversion."))
+        return False
+    except Exception as e:
+        logging.warning(_format_log_message(f"⚠️ Could not get size for {input_file.name}: {e}. Proceeding without size info."))
+        logging.info(_format_log_message(f"▶️ File: '{input_file.name}' - STARTED (Thread {threading.get_ident()})"))
+
 
     output_file = input_file.with_suffix(".mp4")
     if output_file.exists():
-        logging.info(f"⏭️ File: '{input_file.name}' - Already converted to '{output_file.name}'")
+        output_file_size_bytes = 0
+        try:
+            output_file_size_bytes = output_file.stat().st_size
+            output_file_size_gb = output_file_size_bytes / (1024**3)
+            logging.info(_format_log_message(f"⏭️ File: '{input_file.name}' - Already converted to '{output_file.name}' (Output Size: {output_file_size_gb:.2f} GB)"))
+        except Exception as e:
+            logging.warning(_format_log_message(f"⚠️ Could not get output file size for {output_file.name}: {e}. Proceeding without size info."))
+            logging.info(_format_log_message(f"⏭️ File: '{input_file.name}' - Already converted to '{output_file.name}'"))
         return True
 
     video_codec = get_video_codec(input_file)
@@ -385,10 +475,10 @@ def convert_to_mp4(input_file: Path) -> bool:
     else:
         sub_status_parts.append("❌ No Soft English")
     
-    logging.info(f"📝 File: '{input_file.name}' - Subtitles: {' + '.join(sub_status_parts)}")
+    logging.info(_format_log_message(f"📝 File: '{input_file.name}' - Subtitles: {' + '.join(sub_status_parts)}"))
 
     if AppConfig.DRY_RUN:
-        logging.info(f"🧪 File: '{input_file.name}' - DRY-RUN ONLY. No actual conversion will occur.")
+        logging.info(_format_log_message(f"🧪 File: '{input_file.name}' - DRY-RUN ONLY. No actual conversion will occur."))
         return True
 
     temp_file = input_file.with_suffix(".temp.mp4")
@@ -396,26 +486,35 @@ def convert_to_mp4(input_file: Path) -> bool:
     command.append(str(temp_file)) # Add output file to the command
 
     # Converting message
-    logging.info(f"🔄 File: '{input_file.name}' - CONVERTING...")
+    logging.info(_format_log_message(f"🔄 File: '{input_file.name}' - CONVERTING..."))
 
     try:
         # Execute FFmpeg command, capturing output for detailed error logging
-        # Added encoding='utf-8' here for subprocess.run as well
         result = subprocess.run(command, check=True, capture_output=True, text=True, encoding='utf-8')
         shutil.move(str(temp_file), str(output_file))
-        input_file.unlink() # Delete original MKV only after successful conversion and move
-        # Done message with new name
-        logging.info(f"✅ File: '{input_file.name}' - DONE. Converted to: '{output_file.name}'")
+        # Call sidecar cleanup before unlinking original, as original_file_path is needed
+        delete_sidecar_files(input_file) 
+
+        # Get and display output file size after successful conversion
+        output_file_size_bytes = 0
+        try:
+            output_file_size_bytes = output_file.stat().st_size
+            output_file_size_gb = output_file_size_bytes / (1024**3)
+            logging.info(_format_log_message(f"✅ File: '{input_file.name}' - DONE. Converted to: '{output_file.name}' (Output Size: {output_file_size_gb:.2f} GB)"))
+        except Exception as e:
+            logging.warning(_format_log_message(f"⚠️ Could not get final output file size for {output_file.name}: {e}. Proceeding without size info."))
+            logging.info(_format_log_message(f"✅ File: '{input_file.name}' - DONE. Converted to: '{output_file.name}'"))
+
         return True
     except FileNotFoundError:
-        logging.error(f"❌ File: '{input_file.name}' - FAILED. FFmpeg not found at {AppConfig.FFMPEG_PATH}. Please check your path.")
+        logging.error(_format_log_message(f"❌ File: '{input_file.name}' - FAILED. FFmpeg not found at {AppConfig.FFMPEG_PATH}. Please check your path."))
         return False
     except subprocess.CalledProcessError as e:
-        logging.error(f"❌ File: '{input_file.name}' - FAILED. FFmpeg conversion error. "
-                      f"Return Code: {e.returncode}\nSTDOUT: {e.stdout.strip()}\nSTDERR: {e.stderr.strip()}")
+        logging.error(_format_log_message(f"❌ File: '{input_file.name}' - FAILED. FFmpeg conversion error. "
+                      f"Return Code: {e.returncode}\nSTDOUT: {e.stdout.strip()}\nSTDERR: {e.stderr.strip()}"))
         return False
     except Exception as e:
-        logging.error(f"❌ File: '{input_file.name}' - FAILED. An unexpected error occurred: {e}")
+        logging.error(_format_log_message(f"❌ File: '{input_file.name}' - FAILED. An unexpected error occurred: {e}"))
         return False
     finally:
         # Ensure temporary file is always cleaned up
@@ -424,7 +523,7 @@ def convert_to_mp4(input_file: Path) -> bool:
                 temp_file.unlink()
                 logging.debug(f"🗑️ Cleaned up temporary file: {temp_file.name}")
             except OSError as e:
-                logging.warning(f"⚠️ Could not delete temporary file {temp_file.name}: {e}")
+                logging.warning(_format_log_message(f"⚠️ Could not delete temporary file {temp_file.name}: {e}"))
 
 # --- Main Workflow Functions ---
 def flatten_and_clean_movies():
@@ -432,31 +531,31 @@ def flatten_and_clean_movies():
     Moves all converted MP4 movies from source to a flat destination directory.
     Also removes empty directories in the source movie path after files are moved.
     """
-    logging.info(f"\n--- 🎞️ Flattening Movies ---")
+    logging.info(_format_log_message(f"\n--- 🎞️ Flattening Movies ---"))
     mp4_files = list(AppConfig.SOURCE_MOVIES.rglob("*.mp4")) # Get all files first to count for tqdm
-    for mp4_file in tqdm(mp4_files, desc="🚚 Moving Movies", dynamic_ncols=True):
+    for mp4_file in tqdm(mp4_files, desc=_format_log_message("🚚 Moving Movies"), dynamic_ncols=True):
         dest_file = AppConfig.DEST_MOVIES / mp4_file.name
         move_file(mp4_file, dest_file)
 
     # Clean up empty directories in source
-    logging.info("🧹 Cleaning up empty movie directories...")
+    logging.info(_format_log_message("🧹 Cleaning up empty movie directories..."))
     for dirpath, dirnames, filenames in os.walk(AppConfig.SOURCE_MOVIES, topdown=False):
         if not dirnames and not filenames: # If directory has no subdirectories and no files
             try:
                 if not AppConfig.DRY_RUN:
                     os.rmdir(dirpath)
-                logging.info(f"🧹 Removed empty folder: {dirpath}")
+                logging.info(_format_log_message(f"🧹 Removed empty folder: {dirpath}"))
             except OSError as e:
-                logging.warning(f"⚠️ Could not remove empty folder {dirpath}: {e}")
+                logging.warning(_format_log_message(f"⚠️ Could not remove empty folder {dirpath}: {e}"))
 
 def preserve_structure_tv():
     """
     Moves all converted MP4 TV shows from source to destination, preserving
     the original directory structure.
     """
-    logging.info(f"\n--- 📺 Preserving TV Show Structure ---")
+    logging.info(_format_log_message(f"\n--- 📺 Preserving TV Show Structure ---"))
     mp4_files = list(AppConfig.SOURCE_TV.rglob("*.mp4")) # Get all files first to count for tqdm
-    for mp4_file in tqdm(mp4_files, desc="🚚 Moving TV Shows", dynamic_ncols=True):
+    for mp4_file in tqdm(mp4_files, desc=_format_log_message("🚚 Moving TV Shows"), dynamic_ncols=True):
         rel_path = mp4_file.relative_to(AppConfig.SOURCE_TV)
         dest_path = AppConfig.DEST_TV / rel_path
         move_file(mp4_file, dest_path)
@@ -468,26 +567,26 @@ def convert_all():
     """
     all_files_mkv = list(AppConfig.SOURCE_MOVIES.rglob("*.mkv")) + \
                     list(AppConfig.SOURCE_TV.rglob("*.mkv"))
-    logging.info(f"🔍 Found {len(all_files_mkv)} MKV files to process.")
+    logging.info(_format_log_message(f"🔍 Found {len(all_files_mkv)} MKV files to process."))
 
     # Step 1: Pre-clean filenames for all found MKV files
-    logging.info("✨ Cleaning filenames before conversion...")
+    logging.info(_format_log_message("✨ Cleaning filenames before conversion..."))
     cleaned_files_for_conversion = []
-    for file_path in tqdm(all_files_mkv, desc="✨ Cleaning Filenames", dynamic_ncols=True):
+    for file_path in tqdm(all_files_mkv, desc=_format_log_message("✨ Cleaning Filenames"), dynamic_ncols=True):
         cleaned_files_for_conversion.append(clean_filename(file_path))
 
     # Step 2: Perform concurrent conversion
     results = []
     with ThreadPoolExecutor(max_workers=AppConfig.MAX_WORKERS) as executor:
         futures = {executor.submit(convert_to_mp4, f): f for f in cleaned_files_for_conversion}
-        for future in tqdm(as_completed(futures), total=len(futures), desc="🔄 Converting", dynamic_ncols=True):
+        for future in tqdm(as_completed(futures), total=len(futures), desc=_format_log_message("🔄 Converting"), dynamic_ncols=True):
             file_being_processed = futures[future] # Original path (potentially cleaned) for logging
             success = future.result()
             if AppConfig.LOGGING_ENABLED:
                 conversion_log[str(file_being_processed)] = "converted" if success else "error"
             results.append(success)
             save_log() # Save log after each conversion attempt
-    logging.info(f"📊 Conversion Summary: Converted: {results.count(True)} | ❌ Failed: {results.count(False)}")
+    logging.info(_format_log_message(f"📊 Conversion Summary: Converted: {results.count(True)} | ❌ Failed: {results.count(False)}"))
 
 def main():
     """
@@ -495,11 +594,11 @@ def main():
     Initializes logging, performs conversions, and then organizes the converted files.
     """
     setup_logging()
-    logging.info("▶️ Starting media conversion process...")
+    logging.info(_format_log_message("▶️ Starting media conversion process..."))
     convert_all()
     flatten_and_clean_movies()
     preserve_structure_tv()
-    logging.info("🎉 Media conversion process completed.")
+    logging.info(_format_log_message("🎉 Media conversion process completed."))
 
 if __name__ == "__main__":
     main()
