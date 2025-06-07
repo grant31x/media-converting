@@ -1,5 +1,5 @@
 # convert.py
-# This module handles the video conversion process using FFmpeg.
+# This module handles the video conversion process using FFmpeg with a safe temp-file workflow.
 
 import subprocess
 import shlex
@@ -22,55 +22,71 @@ def convert_batch(media_files: List[MediaFile], settings: ConversionSettings) ->
     """
     print("--- Starting Batch Conversion ---")
     for media in media_files:
-        if _should_skip_conversion(media):
-            print(f"Skipping '{media.filename}' (already MP4 or marked as not needing conversion).")
-            media.status = "Skipped"
+        if _should_skip_conversion(media, settings):
             continue
         
-        convert_media_file(media, settings)
+        # Pass the delete_source flag from settings, defaulting to False for safety.
+        delete_source = getattr(settings, 'delete_source_on_success', False)
+        convert_media_file(media, settings, delete_source=delete_source)
     
     print("--- Batch Conversion Finished ---")
     return media_files
 
-def _should_skip_conversion(media: MediaFile) -> bool:
+def _should_skip_conversion(media: MediaFile, settings: ConversionSettings) -> bool:
     """
-    Determines if a file conversion should be skipped.
+    Determines if a file conversion should be skipped based on its state or existence at destination.
 
     Args:
         media: The MediaFile object to check.
+        settings: The conversion settings, used to find the output directory.
 
     Returns:
         True if the conversion should be skipped, False otherwise.
     """
-    # Skip if the user manually flagged it
     if not media.needs_conversion:
+        print(f"Skipping '{media.filename}' (manually marked as not needing conversion).")
+        media.status = "Skipped"
         return True
     
-    # Skip if it's already an MP4 and no subtitle burn-in is required.
-    # Burning subtitles always requires a full video re-encode.
+    # Check if final file already exists to prevent overwriting
+    final_output_path = settings.output_directory / media.output_filename
+    if final_output_path.exists():
+        print(f"Skipping '{media.filename}' (destination file already exists).")
+        media.status = "Skipped (Exists)"
+        return True
+
     is_mp4 = media.source_path.suffix.lower() == ".mp4"
     if is_mp4 and not media.burned_subtitle:
+        print(f"Skipping '{media.filename}' (already MP4 and no burn-in required).")
+        media.status = "Skipped"
         return True
         
     return False
 
-def convert_media_file(media: MediaFile, settings: ConversionSettings):
+def convert_media_file(media: MediaFile, settings: ConversionSettings, delete_source: bool = False):
     """
-    Converts a single media file using FFmpeg.
+    Converts a single media file using FFmpeg, employing a temporary file for safety.
 
     Args:
         media: The MediaFile to convert.
         settings: The conversion settings.
+        delete_source: If True, the original .mkv file will be deleted upon success.
     """
     media.status = "Converting"
-    output_path = settings.output_directory / media.output_filename
-    media.destination_path = output_path
+    final_output_path = settings.output_directory / media.output_filename
+    # Define a temporary output file path.
+    temp_output_path = final_output_path.with_suffix(".temp.mp4")
+    media.destination_path = final_output_path  # The ultimate destination remains the same.
+    
+    # Pre-cleanup: ensure no old temp file exists from a previous failed run.
+    temp_output_path.unlink(missing_ok=True)
     
     try:
-        # 1. Build the command based on the file's needs and user settings
-        cmd_list = _build_ffmpeg_command(media, settings)
+        # 1. Build the command to write to the temporary file.
+        cmd_list = _build_ffmpeg_command(media, settings, temp_output_path)
         cmd_str = " ".join(shlex.quote(str(c)) for c in cmd_list)
         print(f"\nProcessing: {media.filename}")
+        print(f"  -> Writing to temp file: {temp_output_path.name}")
         print(f"  Command: {cmd_str}")
 
         if settings.dry_run:
@@ -78,157 +94,85 @@ def convert_media_file(media: MediaFile, settings: ConversionSettings):
             print("  -> Dry Run: Command not executed.")
             return
 
-        # 2. Execute the FFmpeg command
-        result = subprocess.run(
+        # 2. Execute the FFmpeg command.
+        subprocess.run(
             cmd_list,
             capture_output=True,
             text=True,
             encoding='utf-8',
-            check=True # Will raise CalledProcessError on failure
+            check=True # Will raise CalledProcessError on non-zero exit codes.
         )
         
+        # 3. VERIFY & RENAME: If successful, rename the temp file to the final name.
+        print(f"  -> FFmpeg process completed successfully.")
+        print(f"  -> Renaming '{temp_output_path.name}' to '{final_output_path.name}'")
+        temp_output_path.rename(final_output_path)
+        
         media.status = "Converted"
-        print(f"  -> Success: Converted '{media.filename}' to '{output_path.name}'")
-        # In a real run, you'd get file sizes here
-        # media.converted_size_mb = output_path.stat().st_size / (1024 * 1024)
+        
+        # 4. DELETE SOURCE (Optional): If enabled, delete the original .mkv file.
+        if delete_source:
+            print(f"  -> Deleting source file: '{media.source_path}'")
+            try:
+                media.source_path.unlink()
+            except Exception as e:
+                print(f"  -> Warning: Failed to delete source file. Error: {e}")
+        else:
+            print("  -> Source file preserved as per settings.")
 
-    except FileNotFoundError:
-        media.status = "Error"
-        media.error_message = "ffmpeg command not found. Is FFmpeg installed and in your system's PATH?"
-        print(f"  -> Error: {media.error_message}")
     except subprocess.CalledProcessError as e:
         media.status = "Error"
-        error_details = e.stderr.strip().split('\n')[-3:] # Get last few lines of error
-        media.error_message = f"FFmpeg failed with exit code {e.returncode}. Error: {' '.join(error_details)}"
+        error_details = e.stderr.strip().split('\n')[-3:] # Get last few lines of error.
+        media.error_message = f"FFmpeg failed. Error: {' '.join(error_details)}"
         print(f"  -> Error: {media.error_message}")
+        # CLEANUP: Delete the partial temp file on failure.
+        print(f"  -> Cleaning up partial temp file: '{temp_output_path.name}'")
+        temp_output_path.unlink(missing_ok=True)
+
     except Exception as e:
         media.status = "Error"
-        media.error_message = f"An unexpected error occurred: {e}"
+        media.error_message = f"An unexpected error occurred during conversion: {e}"
         print(f"  -> Error: {media.error_message}")
+        # CLEANUP: Delete the partial temp file on failure.
+        print(f"  -> Cleaning up partial temp file: '{temp_output_path.name}'")
+        temp_output_path.unlink(missing_ok=True)
 
-
-def _build_ffmpeg_command(media: MediaFile, settings: ConversionSettings) -> List[str]:
-    """Constructs the full FFmpeg command as a list of arguments."""
+def _build_ffmpeg_command(media: MediaFile, settings: ConversionSettings, output_path: Path) -> List[str]:
+    """Constructs the full FFmpeg command, pointing to a specified output path."""
     
-    # --- Base Command ---
-    command = ["ffmpeg", "-y", "-i", media.source_path]
+    # Use -n to prevent overwriting temp file, though our script's logic should already prevent this.
+    command = ["ffmpeg", "-n", "-i", media.source_path]
 
-    # --- Video Filter (for burning subtitles) ---
     video_filters = []
     if media.burned_subtitle:
-        # IMPORTANT: FFmpeg needs the source file path escaped for the subtitles filter.
-        # On Windows, this involves escaping colons and backslashes.
         subtitle_file_path = str(media.source_path).replace('\\', '/').replace(':', '\\:')
-        # Use the original stream index for the filter
         video_filters.append(f"subtitles='{subtitle_file_path}':stream_index={media.burned_subtitle.index}")
     
     if video_filters:
         command.extend(["-vf", ",".join(video_filters)])
 
-    # --- Video Codec ---
-    # Re-encode if burning subs, otherwise copy if possible.
     if media.burned_subtitle:
         if settings.use_nvenc:
-            command.extend([
-                "-c:v", "hevc_nvenc",
-                "-preset", "p5",
-                "-rc:v", "vbr_hq",
-                "-cq", "20",
-                "-tier", "high"
-            ])
+            command.extend(["-c:v", "hevc_nvenc", "-preset", "p5", "-rc:v", "vbr_hq", "-cq", "20", "-tier", "high"])
         else:
-            # Fallback to software encoding
             command.extend(["-c:v", "libx265", "-crf", str(settings.crf), "-preset", "slow"])
     else:
         command.extend(["-c:v", "copy"])
 
-    # --- Audio Codec ---
-    # Map all audio streams and re-encode to AAC if necessary.
     command.extend(["-map", "0:a", "-c:a", settings.audio_codec, "-b:a", settings.audio_bitrate])
 
-    # --- Subtitle Handling (Soft-copy) ---
     soft_copy_subs = [s for s in media.subtitle_tracks if s.action == 'copy']
     output_sub_index = 0
-    
-    # We can only copy text-based subtitles to MP4.
     TEXT_SUB_CODECS = ['subrip', 'ass', 'mov_text', 'ssa']
 
     for sub in soft_copy_subs:
         if sub.codec in TEXT_SUB_CODECS:
-            # Map the subtitle stream using its relative ffmpeg index
-            command.extend(["-map", f"0:s:{sub.ffmpeg_index}"])
-            # Set the codec for this specific output stream
-            command.extend([f"-c:s:{output_sub_index}", "mov_text"])
+            command.extend(["-map", f"0:s:{sub.ffmpeg_index}", f"-c:s:{output_sub_index}", "mov_text"])
             output_sub_index += 1
     
-    # If no streams are explicitly mapped, ffmpeg picks the "best" one.
-    # To ensure we only get what we want, we should map the video stream too.
-    command.extend(["-map", "0:v"])
-
-    # --- Metadata and Output ---
-    command.extend(["-map_metadata", "0"])
-    command.append(settings.output_directory / media.output_filename)
+    command.extend(["-map", "0:v", "-map_metadata", "0"])
+    
+    # CRITICAL: Use the passed output path (which should be the .temp.mp4 path).
+    command.append(output_path)
 
     return command
-
-# Example Usage:
-if __name__ == "__main__":
-    print("--- Running converter module in test mode (Dry Run) ---")
-    
-    # 1. Setup a mock environment
-    test_dir = Path("./__test_mkv_folder__")
-    output_dir = Path("./__converted_output__")
-    test_dir.mkdir(exist_ok=True)
-    output_dir.mkdir(exist_ok=True)
-    dummy_mkv_path = test_dir / "Alien.Invasion.2025.mkv"
-    dummy_mkv_path.touch()
-
-    # 2. Define Conversion Settings
-    conv_settings = ConversionSettings(
-        output_directory=output_dir,
-        use_nvenc=True,
-        dry_run=True  # IMPORTANT: Set to True for testing to only print commands
-    )
-    
-    # 3. Create mock MediaFile objects for different scenarios
-
-    # --- SCENARIO 1: Burn-in a forced subtitle ---
-    media1 = MediaFile(source_path=dummy_mkv_path)
-    sub_forced = SubtitleTrack(index=3, ffmpeg_index=1, language="eng", title="Forced", is_forced=True)
-    media1.subtitle_tracks = [
-        SubtitleTrack(index=2, ffmpeg_index=0, language="eng", title="Full"),
-        sub_forced
-    ]
-    media1.burned_subtitle = sub_forced # User or logic has selected this for burning
-    sub_forced.action = 'burn'
-
-    # --- SCENARIO 2: Soft-copy two subtitles ---
-    media2 = MediaFile(source_path=dummy_mkv_path)
-    media2.output_filename = "soft_copy_test.mp4"
-    sub_eng = SubtitleTrack(index=2, ffmpeg_index=0, language="eng", codec="subrip", action="copy")
-    sub_spa = SubtitleTrack(index=3, ffmpeg_index=1, language="spa", codec="subrip", action="copy")
-    sub_pgs = SubtitleTrack(index=4, ffmpeg_index=2, language="eng", codec="hdmv_pgs_subtitle", action="copy") # Image-based, should be ignored
-    media2.subtitle_tracks = [sub_eng, sub_spa, sub_pgs]
-
-    # --- SCENARIO 3: File to be skipped ---
-    media3 = MediaFile(source_path=Path("already_converted.mp4"))
-
-    # 4. Run the batch conversion
-    batch_list = [media1, media2, media3]
-    convert_batch(batch_list, conv_settings)
-    
-    # 5. Print results
-    print("\n--- Final Statuses ---")
-    for m in batch_list:
-        print(f"File: {m.filename}, Status: {m.status}")
-        if m.error_message:
-            print(f"  Error: {m.error_message}")
-            
-    # 6. Cleanup
-    dummy_mkv_path.unlink()
-    test_dir.rmdir()
-    # Note: In a real dry run, the output directory would remain empty.
-    # If not a dry run, you'd want to clean up generated files.
-    for f in output_dir.glob("*"): f.unlink()
-    output_dir.rmdir()
-
