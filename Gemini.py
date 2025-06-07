@@ -29,13 +29,13 @@ class AppConfig:
 
     # Source and Destination directories for media
     SOURCE_MOVIES: Path = Path("E:/Movies")
-    SOURCE_TV: Path = Path("Z:/TV Shows") # Changed to Z:/TV Shows based on typical setup
+    SOURCE_TV: Path = Path("E:/TV Shows") # Reverted to original path as requested
     DEST_MOVIES: Path = Path("Z:/Movies")
     DEST_TV: Path = Path("Z:/TV Shows")
 
     # Terms to clean from filenames (case-insensitive, whole words)
     CLEANUP_TERMS: list[str] = [
-        "1080p", "70p", "BluRay", "x264", "YTS", "BRRip", "WEBRip", "WEB-DL",
+        "1080p", "720p", "BluRay", "x264", "YTS", "BRRip", "WEBRip", "WEB-DL",
         "HDRip", "DVDRip", "AAC", "5.1", "H264", "H265", "HEVC"
     ]
 
@@ -55,7 +55,7 @@ def setup_logging():
   
         # IMPORTANT: Specify encoding='utf-8' for both handlers to support emojis and wide characters.
         logging.basicConfig(
-            level=logging.INFO,
+            level=logging.INFO, # Keep as INFO by default; user to manually change to DEBUG for debugging
             format="%(asctime)s - %(levelname)s - %(message)s",
             handlers=[
                 logging.FileHandler(AppConfig.LOG_FILE_ACTIVITY, encoding='utf-8'), # Log to a file with UTF-8
@@ -219,7 +219,7 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
             english_streams_candidates.append(stream["index"])
             logging.debug(f"DEBUG: Added English stream candidate: {stream['index']}")
 
-    # Heuristic for forced burn-in if no explicit or title-based forced was found
+    # Heuristic for forced burn-in if no explicit forced tag or title-based forced was found
     if forced_burn_in_idx == -1 and len(english_streams_candidates) > 0:
         # Common convention: the first English track is often the FFD (Forced Foreign Dialogue)
         forced_burn_in_idx = english_streams_candidates[0]
@@ -233,7 +233,7 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
             logging.debug(f"DEBUG: Found soft English subtitle at index: {soft_english_cc_idx}")
             break
 
-    # If the only English track was picked as forced, then there's no separate soft English track
+    # Final check: If only one English track and it's chosen as forced, then no separate soft track
     if soft_english_cc_idx == forced_burn_in_idx:
         soft_english_cc_idx = -1 
         logging.debug("DEBUG: Forced and soft English indices are the same, clearing soft_english_cc_idx.")
