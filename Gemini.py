@@ -23,6 +23,8 @@ class AppConfig:
     # Paths to FFmpeg and FFprobe executables
     FFMPEG_PATH: Path = Path(r"C:\Programs2\ffmpeg\ffmpeg_essentials_build\bin\ffmpeg.exe")
     FFPROBE_PATH: Path = Path(r"C:\Programs2\ffmpeg\ffmpeg_essentials_build\bin\ffprobe.exe")
+    # Path to mkvmerge executable (part of MKVToolNix)
+    MKVMERGE_PATH: Path = Path(r"C:\Program Files\MKVToolNix\mkvmerge.exe") 
 
     # Paths for logging
     LOG_FILE_JSON: Path = Path("D:/Python/Logs/conversion_log.json") # For JSON log of conversion status
@@ -103,47 +105,59 @@ def save_log():
             with open(AppConfig.LOG_FILE_JSON, "w", encoding="utf-8") as f: # Ensure JSON log is UTF-8
                 json.dump(conversion_log, f, indent=4)
         except Exception as e:
-            logging.error(f"❌ Failed to write conversion log JSON: {e}")
+            logging.error(_format_log_message(f"❌ Failed to write conversion log JSON: {e}"))
 
-# --- FFprobe Helper Functions ---
-def _run_ffprobe(file_path: Path, stream_type: str) -> dict:
+# --- Media Probe Helper Function ---
+def _run_media_probe(file_path: Path, stream_type: str) -> dict:
     """
-    Helper function to run ffprobe and return parsed JSON output for a specified stream type.
-
-    Args:
-        file_path: The Path object of the media file.
-        stream_type: The stream type to select (e.g., "a:0", "v:0", "s").
-
-    Returns:
-        A dictionary containing FFprobe's JSON output for the streams,
-        or an empty dictionary if an error occurs.
+    Helper function to run ffprobe (for video/audio) or mkvmerge (for subtitles)
+    and return parsed JSON output.
     """
-    try:
-        # IMPORTANT: Added 'disposition' to probe_entries for subtitle streams.
-        # disposition contains flags like 'forced', 'default', etc.
-        probe_entries = "stream=index,codec_name,tags=language,title,forced,disposition" if stream_type == "s" else "stream=codec_name"
-        command = [
-            str(AppConfig.FFPROBE_PATH), "-v", "error", "-select_streams", stream_type,
-            "-show_entries", probe_entries, "-of", "json", str(file_path)
-        ]
-        result = subprocess.run(command, capture_output=True, text=True, check=True, encoding='utf-8')
-        return json.loads(result.stdout)
-    except FileNotFoundError:
-        logging.error(_format_log_message(f"❌ FFprobe not found at {AppConfig.FFPROBE_PATH}. Please check your path."))
-        return {"streams": []}
-    except subprocess.CalledProcessError as e:
-        logging.warning(_format_log_message(f"⚠️ FFprobe command failed for {file_path.name} ({stream_type}): {e.stderr.strip()}"))
-        return {"streams": []}
-    except (json.JSONDecodeError, IndexError) as e:
-        logging.warning(_format_log_message(f"⚠️ Failed to parse FFprobe output for {file_path.name} ({stream_type}): {e}"))
-        return {"streams": []}
-    except Exception as e:
-        logging.warning(_format_log_message(f"⚠️ An unexpected error occurred with FFprobe for {file_path.name}: {e}"))
-        return {"streams": []}
+    if stream_type == "s": # Use mkvmerge for subtitle probing (more reliable metadata for MKV)
+        try:
+            command = [
+                str(AppConfig.MKVMERGE_PATH), "-J", str(file_path)
+            ]
+            result = subprocess.run(command, capture_output=True, text=True, check=True, encoding='utf-8')
+            return json.loads(result.stdout)
+        except FileNotFoundError:
+            logging.error(_format_log_message(f"❌ mkvmerge not found at {AppConfig.MKVMERGE_PATH}. Please check your path."))
+            return {"tracks": []} # mkvmerge returns 'tracks' not 'streams'
+        except subprocess.CalledProcessError as e:
+            logging.warning(_format_log_message(f"⚠️ mkvmerge command failed for {file_path.name}: {e.stderr.strip()}"))
+            return {"tracks": []}
+        except (json.JSONDecodeError, IndexError) as e:
+            logging.warning(_format_log_message(f"⚠️ Failed to parse mkvmerge output for {file_path.name}: {e}"))
+            return {"tracks": []}
+        except Exception as e:
+            logging.warning(_format_log_message(f"⚠️ An unexpected error occurred with mkvmerge for {file_path.name}: {e}"))
+            return {"tracks": []}
+    else: # Use ffprobe for video/audio probing
+        try:
+            # For video/audio, we still need codec_name
+            probe_entries = "stream=codec_name"
+            command = [
+                str(AppConfig.FFPROBE_PATH), "-v", "error", "-select_streams", stream_type,
+                "-show_entries", probe_entries, "-of", "json", str(file_path)
+            ]
+            result = subprocess.run(command, capture_output=True, text=True, check=True, encoding='utf-8')
+            return json.loads(result.stdout)
+        except FileNotFoundError:
+            logging.error(_format_log_message(f"❌ FFprobe not found at {AppConfig.FFPROBE_PATH}. Please check your path."))
+            return {"streams": []}
+        except subprocess.CalledProcessError as e:
+            logging.warning(_format_log_message(f"⚠️ FFprobe command failed for {file_path.name} ({stream_type}): {e.stderr.strip()}"))
+            return {"streams": []}
+        except (json.JSONDecodeError, IndexError) as e:
+            logging.warning(_format_log_message(f"⚠️ Failed to parse FFprobe output for {file_path.name} ({stream_type}): {e}"))
+            return {"streams": []}
+        except Exception as e:
+            logging.warning(_format_log_message(f"⚠️ An unexpected error occurred with FFprobe for {file_path.name}: {e}"))
+            return {"streams": []}
 
 def get_audio_codec(file_path: Path) -> str:
     """
-    Retrieves the audio codec name of the first audio stream in a given media file.
+    Retrieves the audio codec name of the first audio stream in a given media file using ffprobe.
 
     Args:
         file_path: The Path object of the media file.
@@ -151,13 +165,13 @@ def get_audio_codec(file_path: Path) -> str:
     Returns:
         The name of the audio codec (e.g., "aac", "ac3"), or "unknown" if an error occurs.
     """
-    data = _run_ffprobe(file_path, "a:0")
+    data = _run_media_probe(file_path, "a:0")
     streams = data.get("streams", [])
     return streams[0]["codec_name"] if streams else "unknown"
 
 def get_video_codec(file_path: Path) -> str:
     """
-    Retrieves the video codec name of the first video stream in a given media file.
+    Retrieves the video codec name of the first video stream in a given media file using ffprobe.
 
     Args:
         file_path: The Path object of the media file.
@@ -165,17 +179,16 @@ def get_video_codec(file_path: Path) -> str:
     Returns:
         The name of the video codec (e.g., "h264", "hevc"), or "unknown" if an error occurs.
     """
-    data = _run_ffprobe(file_path, "v:0")
+    data = _run_media_probe(file_path, "v:0")
     streams = data.get("streams", [])
     return streams[0]["codec_name"] if streams else "unknown"
 
 def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
     """
     Determines the indices for forced subtitles (to be burned-in) and
-    English soft subtitles (for optional display).
+    English soft subtitles (for optional display) using mkvmerge metadata.
 
-    Prioritizes any explicitly forced subtitle for burn-in, then any subtitle with "forced" in its title.
-    Separately, it finds the first non-forced English subtitle for soft-coding.
+    Prioritizes explicitly tagged forced subtitles. Finds the first non-forced English subtitle.
     PGS (image-based) subtitles are skipped for both.
 
     Args:
@@ -188,80 +201,56 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
     """
     forced_burn_in_idx = -1
     soft_english_cc_idx = -1
-    english_streams_candidates = [] # To keep track of English streams for soft subtitle heuristic
+    all_english_streams_ids = [] # To keep track of all English streams for soft sub selection
 
-    data = _run_ffprobe(file_path, "s")
-    all_streams = data.get("streams", [])
+    # Get track information using mkvmerge
+    mkvmerge_data = _run_media_probe(file_path, "s") # 's' indicates subtitle track request
+    all_tracks = mkvmerge_data.get("tracks", [])
 
-    logging.debug(f"DEBUG: Subtitle streams for {file_path.name}: {json.dumps(all_streams, indent=2)}")
+    logging.debug(f"DEBUG: Subtitle tracks for {file_path.name} (from mkvmerge): {json.dumps(all_tracks, indent=2)}")
 
-    # First pass: Prioritize finding any explicitly forced subtitle (highest priority for burn-in)
-    for stream in all_streams:
-        tags = stream.get("tags", {})
-        codec = stream.get("codec_name", "")
-        # Check disposition.forced first, as it's the most reliable flag
-        is_disposition_forced = stream.get("disposition", {}).get("forced") == 1 
-        is_forced_tag = tags.get("forced") == "1" # Fallback to old 'tags.forced' if disposition not present
-        title = tags.get("title", "").lower()
-
-        if codec in ["pgs", "hdmv_pgs_subtitle"]:
-            logging.debug(f"DEBUG: Skipping PGS subtitle stream {stream.get('index')}")
+    # First pass: Identify the forced subtitle for burn-in (highest priority: explicit 'forced' flag)
+    # mkvmerge outputs `id` as the track ID and `properties.forced` as a boolean
+    for track in all_tracks:
+        if track.get("type") != "subtitles":
             continue
 
-        if is_disposition_forced: # Prioritize disposition.forced
-            forced_burn_in_idx = stream["index"]
-            logging.debug(f"DEBUG: Found disposition-based forced subtitle at index: {forced_burn_in_idx}")
-            break 
-        elif is_forced_tag: # Fallback to tags.forced
-            forced_burn_in_idx = stream["index"]
-            logging.debug(f"DEBUG: Found tags-based forced subtitle at index: {forced_burn_in_idx}")
-            break
-
-    # Second pass: If no explicit forced subtitle, fallback to "forced" in title
-    if forced_burn_in_idx == -1:
-        for stream in all_streams:
-            tags = stream.get("tags", {})
-            codec = stream.get("codec_name", "")
-            title = tags.get("title", "").lower()
-
-            if codec in ["pgs", "hdmv_pgs_subtitle"]:
-                continue
-
-            if "forced" in title:
-                forced_burn_in_idx = stream["index"]
-                logging.debug(f"DEBUG: Found title-based forced subtitle at index: {forced_burn_in_idx}")
-                break 
-
-    # Collect all English streams for soft subtitle consideration and heuristic forced
-    for stream in all_streams:
-        tags = stream.get("tags", {})
-        codec = stream.get("codec_name", "")
-        lang = tags.get("language", "").lower()
-        # Also ensure this English stream is not the one we just picked as forced
-        is_current_stream_forced_candidate = (stream.get("disposition", {}).get("forced") == 1) or \
-                                             (tags.get("forced") == "1") or \
-                                             ("forced" in tags.get("title", "").lower())
-
-        if codec in ["pgs", "hdmv_pgs_subtitle"]:
+        codec = track.get("properties", {}).get("codec_id", "").lower()
+        if codec in ["s_vobsub", "s_image", "s_hdpg", "s_hdmv/pgs"]: # Common PGS/image-based codecs
+            logging.debug(f"DEBUG: Skipping image-based subtitle track {track.get('id')} (codec: {codec})")
             continue
 
-        # Only consider truly non-forced English streams for the soft subtitle track
-        if lang == "eng" and not is_current_stream_forced_candidate:
-            english_streams_candidates.append(stream["index"])
-            logging.debug(f"DEBUG: Added English stream candidate: {stream['index']}")
+        if track.get("properties", {}).get("forced_track") is True:
+            forced_burn_in_idx = track["id"]
+            logging.debug(f"DEBUG: Found explicitly forced subtitle track at ID: {forced_burn_in_idx}")
+            break # Found the primary forced track, no need to check further
 
-    # Heuristic for forced burn-in if no explicit forced tag or title-based forced was found
-    # and we have English streams available. This assumes the *first* English stream is the forced one.
-    if forced_burn_in_idx == -1 and len(english_streams_candidates) > 0:
-        forced_burn_in_idx = english_streams_candidates[0]
-        logging.debug(f"DEBUG: Heuristic: Assigning first English stream {forced_burn_in_idx} as forced burn-in (as no explicit forced found).")
+    # Second pass: Collect all English subtitle tracks and identify the soft English one
+    for track in all_tracks:
+        if track.get("type") != "subtitles":
+            continue
 
-    # Find soft English subtitle: first English track that is NOT the forced one
-    # This loop ensures we find a *different* English stream for soft-coding
-    for eng_idx in english_streams_candidates:
-        if eng_idx != forced_burn_in_idx:
-            soft_english_cc_idx = eng_idx
-            logging.debug(f"DEBUG: Found soft English subtitle at index: {soft_english_cc_idx}")
+        codec = track.get("properties", {}).get("codec_id", "").lower()
+        if codec in ["s_vobsub", "s_image", "s_hdpg", "s_hdmv/pgs"]:
+            continue
+
+        lang = track.get("properties", {}).get("language", "").lower()
+        
+        if lang == "eng":
+            all_english_streams_ids.append(track["id"])
+            logging.debug(f"DEBUG: Added English stream candidate: {track['id']}")
+
+    # Heuristic for forced burn-in if no explicit forced flag was found but there are English tracks
+    # This aligns with the user's scenario: first English track is the forced one.
+    if forced_burn_in_idx == -1 and len(all_english_streams_ids) > 0:
+        forced_burn_in_idx = all_english_streams_ids[0]
+        logging.debug(f"DEBUG: Heuristic: Assigning first English stream ID {forced_burn_in_idx} as forced burn-in (as no explicit forced found).")
+
+    # Find soft English subtitle: the first English track that is NOT the forced one
+    for eng_id in all_english_streams_ids:
+        if eng_id != forced_burn_in_idx:
+            soft_english_cc_idx = eng_id
+            logging.debug(f"DEBUG: Found soft English subtitle at ID: {soft_english_cc_idx}")
             break
 
     # Final check: If only one relevant English track was found and used as forced, then no separate soft track
