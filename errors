@@ -1,0 +1,435 @@
+PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsApps/python3.11.exe d:/Python/media-converting/Gemini.py
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 33-34: character maps to <undefined>
+Call stack:
+  File "d:\Python\media-converting\Gemini.py", line 431, in <module>
+    main()
+  File "d:\Python\media-converting\Gemini.py", line 424, in main
+    logging.info("▶️ Starting media conversion process...")
+Message: '▶️ Starting media conversion process...'
+Arguments: ()
+2025-06-06 20:44:17,844 - INFO - ▶️ Starting media conversion process...
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f50d' in position 33: character maps to <undefined>
+Call stack:
+  File "d:\Python\media-converting\Gemini.py", line 431, in <module>
+    main()
+  File "d:\Python\media-converting\Gemini.py", line 425, in main
+    convert_all()
+  File "d:\Python\media-converting\Gemini.py", line 397, in convert_all
+    logging.info(f"🔍 Found {len(all_files_mkv)} MKV files to process.")
+Message: '🔍 Found 4 MKV files to process.'
+Arguments: ()
+2025-06-06 20:44:17,847 - INFO - 🔍 Found 4 MKV files to process.
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2728' in position 33: character maps to <undefined>
+Call stack:
+  File "d:\Python\media-converting\Gemini.py", line 431, in <module>
+    main()
+  File "d:\Python\media-converting\Gemini.py", line 425, in main
+    convert_all()
+  File "d:\Python\media-converting\Gemini.py", line 400, in convert_all
+    logging.info("✨ Cleaning filenames before conversion...")
+Message: '✨ Cleaning filenames before conversion...'
+Arguments: ()
+2025-06-06 20:44:17,848 - INFO - ✨ Cleaning filenames before conversion...
+✨ Cleaning Filenames: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:00<?, ?it/s] 
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+🔄 Converting:   0%|                                                                                                             | 0/4 [00:00<?, ?it/s]UnicodeEncodeError: 'charmap' codec can't encode characters in position 33-34: character maps to <undefined>
+Call stack:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1002, in _bootstrap    
+    self._bootstrap_inner()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 83, in _worker
+    work_item.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "d:\Python\media-converting\Gemini.py", line 292, in convert_to_mp4
+    logging.info(f"▶️ File: '{input_file.name}' - STARTED (Thread {threading.get_ident()})")
+Message: "▶️ File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - STARTED (Thread 19492)"
+Arguments: ()
+2025-06-06 20:44:17,860 - INFO - ▶️ File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - STARTED (Thread 19492)
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 33-34: character maps to <undefined>
+Call stack:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1002, in _bootstrap    
+    self._bootstrap_inner()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 83, in _worker
+    work_item.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "d:\Python\media-converting\Gemini.py", line 292, in convert_to_mp4
+    logging.info(f"▶️ File: '{input_file.name}' - STARTED (Thread {threading.get_ident()})")
+Message: "▶️ File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - STARTED (Thread 11592)"
+Arguments: ()
+2025-06-06 20:44:17,860 - INFO - ▶️ File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - STARTED (Thread 11592)
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 33-34: character maps to <undefined>
+Call stack:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1002, in _bootstrap    
+    self._bootstrap_inner()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 83, in _worker
+    work_item.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "d:\Python\media-converting\Gemini.py", line 292, in convert_to_mp4
+    logging.info(f"▶️ File: '{input_file.name}' - STARTED (Thread {threading.get_ident()})")
+Message: "▶️ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Thread 20964)"
+Arguments: ()
+2025-06-06 20:44:17,860 - INFO - ▶️ File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Thread 20964)
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4dd' in position 33: character maps to <undefined>
+Call stack:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1002, in _bootstrap    
+    self._bootstrap_inner()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 83, in _worker
+    work_item.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "d:\Python\media-converting\Gemini.py", line 315, in convert_to_mp4
+    logging.info(f"📝 File: '{input_file.name}' - Subtitles: {' + '.join(sub_status)}")
+Message: "📝 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English"
+Arguments: ()
+2025-06-06 20:44:17,918 - INFO - 📝 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English   
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4dd' in position 33: character maps to <undefined>
+Call stack:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1002, in _bootstrap    
+    self._bootstrap_inner()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 83, in _worker
+    work_item.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "d:\Python\media-converting\Gemini.py", line 315, in convert_to_mp4
+    logging.info(f"📝 File: '{input_file.name}' - Subtitles: {' + '.join(sub_status)}")
+Message: "📝 File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English"
+Arguments: ()
+2025-06-06 20:44:17,918 - INFO - 📝 File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f9ea' in position 33: character maps to <undefined>
+Call stack:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1002, in _bootstrap    
+    self._bootstrap_inner()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 83, in _worker
+    work_item.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "d:\Python\media-converting\Gemini.py", line 318, in convert_to_mp4
+    logging.info(f"🧪 File: '{input_file.name}' - DRY-RUN ONLY. No actual conversion will occur.")
+Message: "🧪 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur."
+Arguments: ()
+2025-06-06 20:44:17,919 - INFO - 🧪 File: 'Dune_Part_Two_2024_2160p_4K_WEB_x260bit_-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4dd' in position 33: character maps to <undefined>
+Call stack:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1002, in _bootstrap    
+    self._bootstrap_inner()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 83, in _worker
+    work_item.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "d:\Python\media-converting\Gemini.py", line 315, in convert_to_mp4
+    logging.info(f"📝 File: '{input_file.name}' - Subtitles: {' + '.join(sub_status)}")
+Message: "📝 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English"
+Arguments: ()
+2025-06-06 20:44:17,919 - INFO - 📝 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f9ea' in position 33: character maps to <undefined>
+Call stack:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1002, in _bootstrap    
+    self._bootstrap_inner()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 83, in _worker
+    work_item.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "d:\Python\media-converting\Gemini.py", line 318, in convert_to_mp4
+    logging.info(f"🧪 File: '{input_file.name}' - DRY-RUN ONLY. No actual conversion will occur.")
+Message: "🧪 File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur."
+Arguments: ()
+2025-06-06 20:44:17,920 - INFO - 🧪 File: 'Dune_2021_2160p_4K_WEB_x265_10bit_HDR_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.     
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 33-34: character maps to <undefined>
+Call stack:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1002, in _bootstrap    
+    self._bootstrap_inner()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 83, in _worker
+    work_item.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "d:\Python\media-converting\Gemini.py", line 292, in convert_to_mp4
+    logging.info(f"▶️ File: '{input_file.name}' - STARTED (Thread {threading.get_ident()})")
+Message: "▶️ File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Thread 11592)"
+Arguments: ()
+2025-06-06 20:44:17,921 - INFO - ▶️ File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - STARTED (Thread 11592)
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f9ea' in position 33: character maps to <undefined>
+Call stack:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1002, in _bootstrap    
+    self._bootstrap_inner()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 83, in _worker
+    work_item.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "d:\Python\media-converting\Gemini.py", line 318, in convert_to_mp4
+    logging.info(f"🧪 File: '{input_file.name}' - DRY-RUN ONLY. No actual conversion will occur.")
+Message: "🧪 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur."
+Arguments: ()
+2025-06-06 20:44:17,922 - INFO - 🧪 File: 'Interstellar_2014_2160p_4K_x265_10bit_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.     
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4dd' in position 33: character maps to <undefined>
+Call stack:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1002, in _bootstrap    
+    self._bootstrap_inner()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 83, in _worker
+    work_item.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "d:\Python\media-converting\Gemini.py", line 315, in convert_to_mp4
+    logging.info(f"📝 File: '{input_file.name}' - Subtitles: {' + '.join(sub_status)}")
+Message: "📝 File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English"
+Arguments: ()
+2025-06-06 20:44:17,977 - INFO - 📝 File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - Subtitles: 🚫 No Forced Burn-in + ❌ No Soft English
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f9ea' in position 33: character maps to <undefined>
+Call stack:
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1002, in _bootstrap    
+    self._bootstrap_inner()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 83, in _worker
+    work_item.run()
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "d:\Python\media-converting\Gemini.py", line 318, in convert_to_mp4
+    logging.info(f"🧪 File: '{input_file.name}' - DRY-RUN ONLY. No actual conversion will occur.")
+Message: "🧪 File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur."
+Arguments: ()
+2025-06-06 20:44:17,978 - INFO - 🧪 File: 'Alien_Romulus_2024_2160p_4K_WEB_x265_10bit_AAC5_1-[_MX].mkv' - DRY-RUN ONLY. No actual conversion will occur.
+🔄 Converting: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:00<00:00, 33.61it/s] 
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4ca' in position 33: character maps to <undefined>
+Call stack:
+  File "d:\Python\media-converting\Gemini.py", line 431, in <module>
+    main()
+  File "d:\Python\media-converting\Gemini.py", line 425, in main
+    convert_all()
+  File "d:\Python\media-converting\Gemini.py", line 416, in convert_all
+    logging.info(f"📊 Conversion Summary: Converted: {results.count(True)} | ❌ Failed: {results.count(False)}")
+Message: '📊 Conversion Summary: Converted: 4 | ❌ Failed: 0'
+Arguments: ()
+2025-06-06 20:44:17,980 - INFO - 📊 Conversion Summary: Converted: 4 | ❌ Failed: 0
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 39-40: character maps to <undefined>
+Call stack:
+  File "d:\Python\media-converting\Gemini.py", line 431, in <module>
+    main()
+  File "d:\Python\media-converting\Gemini.py", line 426, in main
+    flatten_and_clean_movies()
+  File "d:\Python\media-converting\Gemini.py", line 361, in flatten_and_clean_movies
+    logging.info(f"\n--- 🎞️ Flattening Movies ---")
+Message: '\n--- 🎞️ Flattening Movies ---'
+Arguments: ()
+2025-06-06 20:44:17,981 - INFO -
+--- 🎞️ Flattening Movies ---
+🚚 Moving Movies: 0it [00:00, ?it/s]
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f9f9' in position 33: character maps to <undefined>
+Call stack:
+  File "d:\Python\media-converting\Gemini.py", line 431, in <module>
+    main()
+  File "d:\Python\media-converting\Gemini.py", line 426, in main
+    flatten_and_clean_movies()
+  File "d:\Python\media-converting\Gemini.py", line 368, in flatten_and_clean_movies
+    logging.info("🧹 Cleaning up empty movie directories...")
+Message: '🧹 Cleaning up empty movie directories...'
+Arguments: ()
+2025-06-06 20:44:17,983 - INFO - 🧹 Cleaning up empty movie directories...
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4fa' in position 39: character maps to <undefined>
+Call stack:
+  File "d:\Python\media-converting\Gemini.py", line 431, in <module>
+    main()
+  File "d:\Python\media-converting\Gemini.py", line 427, in main
+    preserve_structure_tv()
+  File "d:\Python\media-converting\Gemini.py", line 383, in preserve_structure_tv
+    logging.info(f"\n--- 📺 Preserving TV Show Structure ---")
+Message: '\n--- 📺 Preserving TV Show Structure ---'
+Arguments: ()
+2025-06-06 20:44:17,985 - INFO -
+--- 📺 Preserving TV Show Structure ---
+🚚 Moving TV Shows: 0it [00:00, ?it/s]
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\logging\__init__.py", line 1113, in emit   
+    stream.write(msg + self.terminator)
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode   
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f389' in position 33: character maps to <undefined>
+Call stack:
+  File "d:\Python\media-converting\Gemini.py", line 431, in <module>
+    main()
+  File "d:\Python\media-converting\Gemini.py", line 428, in main
+    logging.info("🎉 Media conversion process completed.")
+Message: '🎉 Media conversion process completed.'
+Arguments: ()
+2025-06-06 20:44:17,986 - INFO - 🎉 Media conversion process completed.
