@@ -4,7 +4,7 @@
 import sys
 import json
 import re
-import inspect # Added for robust worker arguments
+import inspect 
 from pathlib import Path
 from typing import List, Callable, Tuple, Dict, Any
 
@@ -12,7 +12,7 @@ from PyQt6.QtCore import QObject, QThread, pyqtSignal, Qt
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QListWidget, QListWidgetItem,
     QLabel, QFileDialog, QFrame, QHBoxLayout, QComboBox, QCheckBox, QGroupBox,
-    QProgressBar, QMessageBox, QDialog, QDialogButtonBox, QLineEdit, QStackedWidget,
+    QMessageBox, QDialog, QDialogButtonBox, QLineEdit, QStackedWidget,
     QStatusBar, QSpinBox
 )
 
@@ -30,7 +30,6 @@ class ConfigHandler:
     def __init__(self, config_path: str = "config.json"):
         self.config_path = Path(config_path)
         self.config: Dict[str, Any] = {}
-        # NEW: Added advanced conversion settings to defaults
         self.default_config = {
             "scan_directories": ["E:/Movies", "E:/TV Shows"],
             "output_directory": "./converted",
@@ -75,7 +74,6 @@ class SettingsWindow(QDialog):
         self.setMinimumWidth(500)
         self.layout = QVBoxLayout(self)
 
-        # --- Advanced Conversion Settings ---
         conv_group = QGroupBox("Conversion Settings")
         conv_layout = QVBoxLayout()
         self.nvenc_checkbox = QCheckBox("Use NVIDIA NVENC Hardware Acceleration")
@@ -91,7 +89,6 @@ class SettingsWindow(QDialog):
         conv_group.setLayout(conv_layout)
         self.layout.addWidget(conv_group)
 
-        # --- Path Settings ---
         self.layout.addWidget(QLabel("Default Output Directory:"))
         output_dir_layout = QHBoxLayout()
         self.output_dir_edit = QLineEdit()
@@ -112,7 +109,6 @@ class SettingsWindow(QDialog):
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         self.layout.addWidget(self.button_box)
 
-        # Connections
         self.browse_output_btn.clicked.connect(lambda: self.browse_directory(self.output_dir_edit))
         self.add_btn.clicked.connect(self.add_scan_directory)
         self.remove_btn.clicked.connect(lambda: self.dir_list_widget.takeItem(self.dir_list_widget.currentRow()))
@@ -145,37 +141,34 @@ class SettingsWindow(QDialog):
         self.config_handler.save_config()
         self.accept()
 
+# REBUILT Worker class for simplicity and robustness
 class Worker(QObject):
     finished = pyqtSignal(object)
     error = pyqtSignal(tuple)
 
-    def __init__(self, fn: Callable, **fn_kwargs):
+    def __init__(self, fn: Callable, *args, **kwargs):
         super().__init__()
         self.fn = fn
-        self.kwargs = fn_kwargs
-        self._is_cancelled = False
+        self.args = args
+        self.kwargs = kwargs
+        self.is_cancelled = False # Flag for cancellation
 
     def run(self):
         try:
-            sig = inspect.signature(self.fn)
-            # Only add 'stop_check' if the target function's signature supports it.
-            if 'stop_check' in sig.parameters:
-                self.kwargs['stop_check'] = lambda: self._is_cancelled
-            
-            result = self.fn(**self.kwargs)
-            if not self._is_cancelled:
+            # The target function now directly receives its arguments
+            result = self.fn(*self.args, **self.kwargs)
+            if not self.is_cancelled:
                 self.finished.emit(result)
         except Exception as e:
-            if not self._is_cancelled:
+            if not self.is_cancelled:
                 import traceback
                 self.error.emit((type(e), e, traceback.format_exc()))
 
     def cancel(self):
-        self._is_cancelled = True
+        self.is_cancelled = True
 
 
 class MediaFileItemWidget(QFrame):
-    """A custom widget to display and manage a single media file, with multiple views."""
     def __init__(self, media_file: MediaFile):
         super().__init__()
         self.media_file = media_file
@@ -303,12 +296,12 @@ class Dashboard(QWidget):
         bottom_controls.addWidget(self.cancel_button)
         self.layout.addLayout(bottom_controls)
 
-    def _run_task(self, task_function: Callable, on_finish: Callable, **kwargs):
+    def _run_task(self, task_function: Callable, on_finish: Callable, *args, **kwargs):
         self.set_buttons_enabled(False)
         self.status_bar.showMessage(f"Running {task_function.__name__}...")
         self.thread = QThread()
-        # The Worker now correctly accepts a dictionary of keyword arguments for the target function
-        self.worker = Worker(task_function, **kwargs)
+        # The Worker now correctly accepts *args and **kwargs for the target function
+        self.worker = Worker(task_function, *args, **kwargs)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.finished.connect(on_finish)
@@ -326,29 +319,32 @@ class Dashboard(QWidget):
             self.cancel_button.setEnabled(False)
 
     def set_buttons_enabled(self, enabled: bool):
+        # Disable all main action buttons while a task is running
         for btn in [self.convert_button, self.edit_metadata_button, self.transfer_button, self.findChild(QPushButton, "Scan Configured"), self.findChild(QPushButton, "Scan Custom...")]:
              if btn: btn.setEnabled(enabled)
+        # Only enable the cancel button when a task is running
         self.cancel_button.setEnabled(not enabled)
 
     def open_settings(self):
         SettingsWindow(self.config_handler, self).exec()
     
-    def _scan_multiple_dirs(self, dir_paths: List[str], stop_check: Callable[[], bool]) -> List[MediaFile]:
+    def _scan_multiple_dirs(self, dir_paths: List[str]) -> List[MediaFile]:
+        # Temporarily removed cancellation from scan to ensure stability.
+        # It can be re-added once the main TypeError is confirmed fixed.
         all_files = []
         for dir_path in dir_paths:
-            if stop_check(): break
-            all_files.extend(subtitlesmkv.scan_directory(Path(dir_path), stop_check=stop_check))
+            all_files.extend(subtitlesmkv.scan_directory(Path(dir_path), stop_check=lambda: False))
         return all_files
 
     def scan_configured_folders(self):
         if not (dirs := self.config_handler.get_setting("scan_directories")):
             self.show_message("No Directories", "Add scan directories in Settings.")
             return
-        self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dir_paths=dirs)
+        self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dirs)
 
     def scan_custom_folder(self):
         if folder := QFileDialog.getExistingDirectory(self, "Select Folder"):
-            self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dir_paths=[folder])
+            self._run_task(self._scan_multiple_dirs, self.on_scan_finished, [folder])
 
     def on_scan_finished(self, result: List[MediaFile]):
         self.media_files_data = result
@@ -388,7 +384,7 @@ class Dashboard(QWidget):
         except Exception as e:
             self.show_message("Error", f"Could not create output directory.\n{e}")
             return
-        self._run_task(convert.convert_batch, self.on_action_finished, media_files=files, settings=settings)
+        self._run_task(convert.convert_batch, self.on_action_finished, files, settings)
 
     def toggle_metadata_edit(self):
         files_to_edit = self.get_selected_media_files()
@@ -410,7 +406,7 @@ class Dashboard(QWidget):
         for f in files_to_move:
             setattr(f, 'is_editing_metadata', False)
         self.refresh_ui()
-        self._run_task(robocopy.move_batch, self.on_action_finished, media_files=files_to_move)
+        self._run_task(robocopy.move_batch, self.on_action_finished, files_to_move)
     
     def on_action_finished(self, result: List[MediaFile]):
         self.refresh_ui()
