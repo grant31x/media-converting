@@ -20,7 +20,6 @@ import convert
 import robocopy
 
 class ConfigHandler:
-    """Handles loading and saving application settings to a JSON file."""
     def __init__(self, config_path: str = "config.json"):
         self.config_path = Path(config_path)
         self.config: Dict[str, Any] = {}
@@ -29,43 +28,29 @@ class ConfigHandler:
             "output_directory": "./converted"
         }
         self.load_config()
-
     def load_config(self):
-        """Loads or creates the configuration file."""
-        if not self.config_path.exists():
-            self.config = self.default_config
-            self.save_config()
+        if not self.config_path.exists(): self.config = self.default_config; self.save_config()
         else:
             try:
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    # Merge loaded config with defaults to ensure all keys are present
-                    self.config = self.default_config | json.load(f)
-            except (json.JSONDecodeError, IOError):
-                self.config = self.default_config
-        self.save_config() # Save back to write any missing default keys
-
+                with open(self.config_path, "r", encoding="utf-8") as f: self.config = self.default_config | json.load(f)
+            except (json.JSONDecodeError, IOError): self.config = self.default_config
+        self.save_config()
     def save_config(self):
-        """Saves the current configuration to the JSON file."""
         try:
-            with open(self.config_path, "w", encoding="utf-8") as f:
-                json.dump(self.config, f, indent=4)
-        except IOError as e:
-            print(f"Error saving config file: {e}")
-
+            with open(self.config_path, "w", encoding="utf-8") as f: json.dump(self.config, f, indent=4)
+        except IOError as e: print(f"Error saving config file: {e}")
     def get_scan_dirs(self) -> List[str]: return self.config.get("scan_directories", [])
     def set_scan_dirs(self, dir_list: List[str]): self.config["scan_directories"] = dir_list
     def get_output_dir(self) -> str: return self.config.get("output_directory", "./converted")
     def set_output_dir(self, dir_path: str): self.config["output_directory"] = dir_path
 
 class SettingsWindow(QDialog):
-    """A dialog window for managing application settings."""
     def __init__(self, config_handler: ConfigHandler, parent=None):
         super().__init__(parent)
         self.config_handler = config_handler
         self.setWindowTitle("Settings")
         self.setMinimumWidth(500)
         self.layout = QVBoxLayout(self)
-
         self.layout.addWidget(QLabel("Default Output Directory:"))
         output_dir_layout = QHBoxLayout()
         self.output_dir_edit = QLineEdit()
@@ -73,68 +58,43 @@ class SettingsWindow(QDialog):
         output_dir_layout.addWidget(self.output_dir_edit)
         output_dir_layout.addWidget(self.browse_output_btn)
         self.layout.addLayout(output_dir_layout)
-
         self.dir_list_widget = QListWidget()
         self.layout.addWidget(QLabel("Scan Directories:"))
         self.layout.addWidget(self.dir_list_widget)
-
         btn_layout = QHBoxLayout()
         self.add_btn = QPushButton("Add Scan Directory...")
         self.remove_btn = QPushButton("Remove Selected")
-        btn_layout.addWidget(self.add_btn)
-        btn_layout.addWidget(self.remove_btn)
+        btn_layout.addWidget(self.add_btn); btn_layout.addWidget(self.remove_btn)
         self.layout.addLayout(btn_layout)
-
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         self.layout.addWidget(self.button_box)
-
         self.browse_output_btn.clicked.connect(self.browse_output_directory)
         self.add_btn.clicked.connect(self.add_directory)
         self.remove_btn.clicked.connect(self.remove_directory)
         self.button_box.accepted.connect(self.save_and_accept)
         self.button_box.rejected.connect(self.reject)
         self.load_settings()
-
     def load_settings(self):
         self.output_dir_edit.setText(self.config_handler.get_output_dir())
         self.dir_list_widget.clear()
-        for directory in self.config_handler.get_scan_dirs():
-            self.dir_list_widget.addItem(directory)
-
+        for directory in self.config_handler.get_scan_dirs(): self.dir_list_widget.addItem(directory)
     def browse_output_directory(self):
-        if folder := QFileDialog.getExistingDirectory(self, "Select Output Directory"):
-            self.output_dir_edit.setText(folder)
-
+        if folder := QFileDialog.getExistingDirectory(self, "Select Output Directory"): self.output_dir_edit.setText(folder)
     def add_directory(self):
-        if folder := QFileDialog.getExistingDirectory(self, "Select Directory to Add"):
-            self.dir_list_widget.addItem(folder)
-
+        if folder := QFileDialog.getExistingDirectory(self, "Select Directory to Add"): self.dir_list_widget.addItem(folder)
     def remove_directory(self):
-        for item in self.dir_list_widget.selectedItems():
-            self.dir_list_widget.takeItem(self.dir_list_widget.row(item))
-
+        for item in self.dir_list_widget.selectedItems(): self.dir_list_widget.takeItem(self.dir_list_widget.row(item))
     def save_and_accept(self):
         self.config_handler.set_scan_dirs([self.dir_list_widget.item(i).text() for i in range(self.dir_list_widget.count())])
         self.config_handler.set_output_dir(self.output_dir_edit.text())
-        self.config_handler.save_config()
-        self.accept()
+        self.config_handler.save_config(); self.accept()
 
 class Worker(QObject):
-    """A worker thread for running background tasks without freezing the GUI."""
-    finished = pyqtSignal(object)
-    error = pyqtSignal(tuple)
-    progress = pyqtSignal(int)
-
-    def __init__(self, fn: Callable, *args, **kwargs):
-        super().__init__()
-        self.fn, self.args, self.kwargs = fn, args, kwargs
-
+    finished = pyqtSignal(object); error = pyqtSignal(tuple); progress = pyqtSignal(int)
+    def __init__(self, fn: Callable, *args, **kwargs): super().__init__(); self.fn, self.args, self.kwargs = fn, args, kwargs
     def run(self):
-        try:
-            self.finished.emit(self.fn(*self.args, **self.kwargs))
-        except Exception as e:
-            import traceback
-            self.error.emit((type(e), e, traceback.format_exc()))
+        try: self.finished.emit(self.fn(*self.args, **self.kwargs))
+        except Exception as e: import traceback; self.error.emit((type(e), e, traceback.format_exc()))
 
 class MediaFileItemWidget(QFrame):
     """A custom widget to display and manage a single media file, with multiple views."""
@@ -210,8 +170,11 @@ class MediaFileItemWidget(QFrame):
                 child.widget().deleteLater()
 
         self.soft_copy_checkboxes: list[QCheckBox] = []
+        # --- NEW: More robust list of text-based codecs ---
+        TEXT_SUB_CODECS = ['subrip', 'srt', 'ass', 'mov_text', 'ssa']
         for track in self.media_file.subtitle_tracks:
-            if track.codec in ['subrip', 'ass', 'mov_text', 'ssa']:
+            # Check if track.codec is not None before checking its value
+            if track.codec and track.codec.lower() in TEXT_SUB_CODECS:
                 cb = QCheckBox(track.get_display_name())
                 cb.setProperty("track", track)
                 self.soft_copy_checkboxes.append(cb)
