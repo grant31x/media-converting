@@ -10,7 +10,7 @@ from PyQt6.QtCore import QObject, QThread, pyqtSignal, Qt
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QListWidget, QListWidgetItem,
     QLabel, QFileDialog, QFrame, QHBoxLayout, QComboBox, QCheckBox, QGroupBox,
-    QProgressBar, QMessageBox, QDialog, QDialogButtonBox
+    QProgressBar, QMessageBox, QDialog, QDialogButtonBox, QLineEdit
 )
 
 # --- Import all our backend modules ---
@@ -31,7 +31,8 @@ class ConfigHandler:
             "scan_directories": [
                 "E:/Movies",
                 "E:/TV Shows"
-            ]
+            ],
+            "output_directory": "./converted"
         }
 
     def load_config(self):
@@ -43,10 +44,13 @@ class ConfigHandler:
         else:
             try:
                 with open(self.config_path, "r", encoding="utf-8") as f:
-                    self.config = json.load(f)
+                    loaded_config = json.load(f)
+                    # Ensure all default keys exist
+                    self.config = self.default_config | loaded_config
             except (json.JSONDecodeError, IOError):
                 print("Error reading config file, loading defaults.")
                 self.config = self.default_config
+        self.save_config() # Save to ensure new keys are written
 
     def save_config(self):
         """Saves the current configuration to the JSON file."""
@@ -64,6 +68,14 @@ class ConfigHandler:
         """Updates the list of scan directories."""
         self.config["scan_directories"] = dir_list
 
+    def get_output_dir(self) -> str:
+        """Returns the output directory path."""
+        return self.config.get("output_directory", "./converted")
+
+    def set_output_dir(self, dir_path: str):
+        """Updates the output directory path."""
+        self.config["output_directory"] = dir_path
+
 
 # ==============================================================================
 # In a real project, the following class would be in: settings_window.py
@@ -78,14 +90,23 @@ class SettingsWindow(QDialog):
 
         self.layout = QVBoxLayout(self)
         
-        # Directory List
+        # Output Directory Section
+        self.layout.addWidget(QLabel("Default Output Directory:"))
+        output_dir_layout = QHBoxLayout()
+        self.output_dir_edit = QLineEdit()
+        self.browse_output_btn = QPushButton("Browse...")
+        output_dir_layout.addWidget(self.output_dir_edit)
+        output_dir_layout.addWidget(self.browse_output_btn)
+        self.layout.addLayout(output_dir_layout)
+
+        # Scan Directory List
         self.dir_list_widget = QListWidget()
         self.layout.addWidget(QLabel("Scan Directories:"))
         self.layout.addWidget(self.dir_list_widget)
         
         # Add/Remove Buttons
         btn_layout = QHBoxLayout()
-        self.add_btn = QPushButton("Add Directory...")
+        self.add_btn = QPushButton("Add Scan Directory...")
         self.remove_btn = QPushButton("Remove Selected")
         btn_layout.addWidget(self.add_btn)
         btn_layout.addWidget(self.remove_btn)
@@ -96,6 +117,7 @@ class SettingsWindow(QDialog):
         self.layout.addWidget(self.button_box)
         
         # --- Connections ---
+        self.browse_output_btn.clicked.connect(self.browse_output_directory)
         self.add_btn.clicked.connect(self.add_directory)
         self.remove_btn.clicked.connect(self.remove_directory)
         self.button_box.accepted.connect(self.save_and_accept)
@@ -105,9 +127,16 @@ class SettingsWindow(QDialog):
 
     def load_settings(self):
         """Populates the UI with current settings from the config handler."""
+        self.output_dir_edit.setText(self.config_handler.get_output_dir())
         self.dir_list_widget.clear()
         for directory in self.config_handler.get_scan_dirs():
             self.dir_list_widget.addItem(directory)
+
+    def browse_output_directory(self):
+        """Opens a dialog to select a new output directory."""
+        folder = QFileDialog.getExistingDirectory(self, "Select Output Directory")
+        if folder:
+            self.output_dir_edit.setText(folder)
 
     def add_directory(self):
         """Opens a dialog to add a new scan directory."""
@@ -130,6 +159,7 @@ class SettingsWindow(QDialog):
             new_dir_list.append(self.dir_list_widget.item(i).text())
         
         self.config_handler.set_scan_dirs(new_dir_list)
+        self.config_handler.set_output_dir(self.output_dir_edit.text())
         self.config_handler.save_config()
         self.accept()
 
@@ -228,13 +258,11 @@ class Dashboard(QWidget):
         self.thread = None
         self.worker = None
 
-        # --- Settings and Configuration ---
         self.config_handler = ConfigHandler()
         self.config_handler.load_config()
 
         self.layout = QVBoxLayout(self)
 
-        # --- Top Control Buttons ---
         top_controls_layout = QHBoxLayout()
         self.scan_config_button = QPushButton("1a. Scan Configured Folders")
         self.scan_custom_button = QPushButton("1b. Scan Custom Folder...")
@@ -257,7 +285,6 @@ class Dashboard(QWidget):
         self.progress_bar = QProgressBar()
         self.layout.addWidget(self.progress_bar)
         
-        # --- Button Connections ---
         self.scan_config_button.clicked.connect(self.scan_configured_folders)
         self.scan_custom_button.clicked.connect(self.scan_custom_folder)
         self.convert_button.clicked.connect(self.start_conversion)
@@ -265,7 +292,6 @@ class Dashboard(QWidget):
         self.settings_button.clicked.connect(self.open_settings)
 
     def _run_task(self, task_function: Callable, on_finish: Callable, *args):
-        """Helper to run a function in a background thread."""
         self.set_buttons_enabled(False)
         self.progress_bar.setValue(0)
         
@@ -285,7 +311,6 @@ class Dashboard(QWidget):
         self.thread.start()
 
     def set_buttons_enabled(self, enabled: bool):
-        """Enable or disable the main action buttons."""
         self.scan_config_button.setEnabled(enabled)
         self.scan_custom_button.setEnabled(enabled)
         self.convert_button.setEnabled(enabled)
@@ -293,20 +318,16 @@ class Dashboard(QWidget):
         self.settings_button.setEnabled(enabled)
 
     def open_settings(self):
-        """Opens the settings dialog window."""
         dialog = SettingsWindow(self.config_handler, self)
         dialog.exec()
-        # No need to reload config here as the handler object is shared and updated directly.
 
     def _scan_multiple_dirs(self, dir_paths: List[str]) -> List[MediaFile]:
-        """Wrapper function to scan multiple directories and aggregate results."""
         all_media_files = []
         for dir_path in dir_paths:
             all_media_files.extend(subtitlesmkv.scan_directory(Path(dir_path)))
         return all_media_files
 
     def scan_configured_folders(self):
-        """Scans the list of folders saved in the configuration."""
         configured_dirs = self.config_handler.get_scan_dirs()
         if not configured_dirs:
             self.show_message("No Directories Configured", "Please add scan directories in Settings.")
@@ -315,7 +336,6 @@ class Dashboard(QWidget):
         self._run_task(self._scan_multiple_dirs, self.on_scan_finished, configured_dirs)
 
     def scan_custom_folder(self):
-        """Opens a dialog to select a single custom folder to scan."""
         folder = QFileDialog.getExistingDirectory(self, "Select Custom Media Folder")
         if folder:
             self.file_list.clear()
@@ -357,7 +377,19 @@ class Dashboard(QWidget):
         if not files_to_convert:
             self.show_message("No Files Selected", "Please select files to convert, or scan a folder first.")
             return
-        settings = ConversionSettings()
+            
+        # Initialize settings from our config handler
+        output_dir = Path(self.config_handler.get_output_dir())
+        settings = ConversionSettings(output_directory=output_dir)
+
+        # *** FIX: Ensure output directory exists before starting conversion ***
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            print(f"Ensured output directory exists: {output_dir}")
+        except Exception as e:
+            self.show_message("Directory Error", f"Could not create output directory '{output_dir}'.\nPlease check permissions.\n\nError: {e}")
+            return
+
         self._run_task(convert.convert_batch, self.on_conversion_finished, files_to_convert, settings)
 
     def on_conversion_finished(self, result: List[MediaFile]):
@@ -397,7 +429,13 @@ class Dashboard(QWidget):
     def on_task_error(self, error: Tuple):
         self.set_buttons_enabled(True)
         self.progress_bar.setValue(0)
-        self.show_message("Error", f"An error occurred in the background task:\n{error[1]}")
+        # Add more specific error advice
+        error_message = str(error[1])
+        advice = ""
+        if "No such file or directory" in error_message:
+            advice = "\n\nAdvice: This might be caused by a missing output directory. Please check the path in Settings."
+        
+        self.show_message("Error", f"An error occurred in the background task:\n{error_message}{advice}")
         print(error[2])
 
     def show_message(self, title: str, message: str):
