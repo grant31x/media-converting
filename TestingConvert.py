@@ -110,6 +110,10 @@ def convert_to_aac(input_file: Path, output_file: Path, extract_subs: bool = Fal
         logging.error(f"🚫 Invalid media file: {input_file}")
         return False
 
+    if output_file.exists():
+        print(f"⏭️ Skipping: {output_file.name} already exists.")
+        return True
+
     video_codec = get_video_codec(input_file)
     audio_codec = get_audio_codec(input_file)
     forced_index, full_index, is_fallback = get_subtitle_indices(input_file)
@@ -127,7 +131,6 @@ def convert_to_aac(input_file: Path, output_file: Path, extract_subs: bool = Fal
     map_args = ["-map", "0:v:0"]
 
     if forced_index >= 0:
-        # Correct escaping for FFmpeg: use forward slashes and escape the colon in the drive letter
         input_path_ffmpeg = str(input_file).replace("\\", "/")
         if ":" in input_path_ffmpeg:
             input_path_ffmpeg = input_path_ffmpeg.replace(":", "\\:")
@@ -192,6 +195,11 @@ def main():
 
         elapsed = datetime.now() - start
         print(f"⏱️ All conversions completed in {elapsed}")
+
+        # 📊 Summary
+        successes = sum(1 for _, s in results if s)
+        failures = len(results) - successes
+        print(f"\n📊 Summary:\n   ✅ Converted: {successes}\n   ❌ Failed: {failures}")
 
 if __name__ == "__main__":
     main()

@@ -1,37 +1,29 @@
-import os
+import re
 import subprocess
 import logging
-import json
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
-from collections import defaultdict
+import os
+import json
+import shutil
+from typing import Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+import threading
 
 # Configuration
+DRY_RUN = False
+EXTRACT_SUBTITLES = False
+MAX_WORKERS = 3
+LOGGING_ENABLED = False
 FFMPEG_PATH = r"C:\\Programs2\\ffmpeg\\ffmpeg_essentials_build\\bin\\ffmpeg.exe"
-BASE_FOLDERS = [Path(r"Z:\\Movies"), Path(r"Z:\\TV Shows"), Path(r"I:\\Movies")]
-VALID_EXTENSIONS = [".mp4", ".mkv"]
-TARGET_AUDIO_CODEC = "aac"
-TARGET_VIDEO_CODEC = "h264"
-DRY_RUN = False  # Set to True for dry-run mode
+FFPROBE_PATH = r"C:\\Programs2\\ffmpeg\\ffmpeg_essentials_build\\bin\\ffprobe.exe"
+LOG_FILE = Path("D:/Python/Logs/conversion_log.json")
 
-# Resume support log
-STATE_LOG = Path("conversion_state.json")
-PROCESSED_FILES = set()
-if STATE_LOG.exists():
-    try:
-        with open(STATE_LOG, "r") as f:
-            PROCESSED_FILES = set(json.load(f))
-    except Exception:
-        PROCESSED_FILES = set()
-
-# Logging
-LOG_FILE = Path("conversion_log.txt")
-logging.basicConfig(
-    filename=LOG_FILE,
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+SOURCE_MOVIES = Path("E:/Movies")
+SOURCE_TV = Path("E:/TV Shows")
+DEST_MOVIES = Path("Z:/Movies")
+DEST_TV = Path("Z:/TV Shows")
 
 # Filename cleanup terms
 CLEANUP_TERMS = [
@@ -39,7 +31,79 @@ CLEANUP_TERMS = [
     "HDRip", "DVDRip", "AAC", "5.1", "H264", "H265", "HEVC"
 ]
 
-def clean_filename(file_path):
+if LOGGING_ENABLED:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+conversion_log = {}
+
+def save_log():
+    if not LOGGING_ENABLED:
+        return
+    try:
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(LOG_FILE, "w", encoding="utf-8") as f:
+            json.dump(conversion_log, f, indent=4)
+    except Exception as e:
+        logging.error(f"❌ Failed to write conversion log: {e}")
+
+def get_audio_codec(file_path: Path) -> str:
+    try:
+        result = subprocess.run([
+            FFPROBE_PATH, "-v", "error", "-select_streams", "a:0",
+            "-show_entries", "stream=codec_name", "-of", "json", str(file_path)
+        ], capture_output=True, text=True, check=True)
+        return json.loads(result.stdout)["streams"][0]["codec_name"]
+    except Exception as e:
+        if LOGGING_ENABLED:
+            logging.warning(f"⚠️ Audio codec error: {e}")
+        return "unknown"
+
+def get_video_codec(file_path: Path) -> str:
+    try:
+        result = subprocess.run([
+            FFPROBE_PATH, "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=codec_name", "-of", "json", str(file_path)
+        ], capture_output=True, text=True, check=True)
+        return json.loads(result.stdout)["streams"][0]["codec_name"]
+    except Exception as e:
+        if LOGGING_ENABLED:
+            logging.warning(f"⚠️ Video codec error: {e}")
+        return "unknown"
+
+def get_subtitle_indices(file_path: Path) -> Tuple[int, int, bool]:
+    forced_idx = -1
+    full_idx = -1
+    fallback_forced = False
+    try:
+        result = subprocess.run([
+            FFPROBE_PATH, "-v", "error", "-select_streams", "s",
+            "-show_entries", "stream=index:stream_tags=language,title,forced:stream=codec_name", "-of", "json", str(file_path)
+        ], capture_output=True, text=True, check=True)
+        streams = json.loads(result.stdout).get("streams", [])
+        for stream in streams:
+            tags = stream.get("tags", {})
+            codec = stream.get("codec_name", "")
+            lang = tags.get("language", "").lower()
+            title = tags.get("title", "").lower()
+            is_forced = tags.get("forced") == "1"
+
+            if codec in ["pgs", "hdmv_pgs_subtitle"]:
+                continue
+
+            if lang == "eng":
+                if is_forced and forced_idx == -1:
+                    forced_idx = stream["index"]
+                elif "forced" in title and forced_idx == -1:
+                    forced_idx = stream["index"]
+                    fallback_forced = True
+                elif full_idx == -1:
+                    full_idx = stream["index"]
+    except Exception as e:
+        if LOGGING_ENABLED:
+            logging.warning(f"⚠️ Subtitle parsing failed for {file_path.name}: {e}")
+    return forced_idx, full_idx, fallback_forced
+
+def clean_filename(file_path: Path) -> Path:
     name = file_path.stem
     for term in CLEANUP_TERMS:
         name = name.replace(term, "")
@@ -49,180 +113,104 @@ def clean_filename(file_path):
         try:
             file_path.rename(cleaned_path)
         except Exception as e:
-            logging.warning(f"Could not rename {file_path.name} to {cleaned_path.name}: {e}")
+            logging.warning(f"⚠️ Could not rename {file_path.name} to {cleaned_path.name}: {e}")
     return cleaned_path
 
-def get_codecs(file_path):
-    try:
-        ffprobe_path = FFMPEG_PATH.replace("ffmpeg.exe", "ffprobe.exe")
-        video_result = subprocess.run(
-            [ffprobe_path, "-v", "error", "-select_streams", "v:0",
-             "-show_entries", "stream=codec_name", "-of", "default=noprint_wrappers=1:nokey=1",
-             str(file_path)],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-        video_codec = video_result.stdout.strip() or "unknown"
+def convert_to_mp4(input_file: Path) -> bool:
+    print(f"🕓 [STARTING] {input_file.name} (Thread {threading.get_ident()})")
 
-        audio_result = subprocess.run(
-            [ffprobe_path, "-v", "error", "-select_streams", "a:0",
-             "-show_entries", "stream=codec_name", "-of", "default=noprint_wrappers=1:nokey=1",
-             str(file_path)],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-        audio_codec = audio_result.stdout.strip() or "unknown"
+    output_file = input_file.with_suffix(".mp4")
+    if output_file.exists():
+        print(f"⏭️ Already converted: {output_file.name}")
+        return True
 
-        return video_codec, audio_codec
-    except Exception as e:
-        logging.error(f"ffprobe codec detection failed for {file_path}: {e}")
-        return "unknown", "unknown"
+    video_codec = get_video_codec(input_file)
+    audio_codec = get_audio_codec(input_file)
+    forced_index, full_index, is_fallback = get_subtitle_indices(input_file)
 
-def convert_file(file_path):
-    new_file = file_path.with_suffix(".mp4")
-    temp_file = new_file.with_name(file_path.stem + "_convert.mp4")
-
-    base_command = [
-        FFMPEG_PATH,
-        "-i", str(file_path),
-        "-map", "0",
-        "-c:v", "libx264",
-        "-preset", "slow",
-        "-crf", "18",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "-c:s", "mov_text",
-        str(temp_file)
-    ]
-
-    try:
-        result = subprocess.run(base_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
-        if result.returncode != 0:
-            logging.warning(f"⚠️ Subtitle conversion failed for {file_path.name}, retrying without subtitles.")
-            print(f"⚠️ Subtitle conversion failed for {file_path.name}, retrying without subtitles.")
-            fallback_command = [
-                FFMPEG_PATH,
-                "-i", str(file_path),
-                "-map", "0:v",
-                "-map", "0:a",
-                "-c:v", "libx264",
-                "-preset", "slow",
-                "-crf", "18",
-                "-c:a", "aac",
-                "-b:a", "192k",
-                str(temp_file)
-            ]
-            result = subprocess.run(fallback_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
-            if result.returncode != 0:
-                logging.error(f"❌ FFmpeg failed even without subtitles for {file_path.name}:\n{result.stderr}")
-                print(f"❌ FFmpeg failed even without subtitles for {file_path.name}:\n{result.stderr}")
-                return "failed"
-
-        if temp_file.exists() and temp_file.stat().st_size > 1_000_000:
-            file_path.unlink()
-            temp_file.rename(file_path)
-            logging.info(f"✅ Replaced {file_path.name} with converted MP4")
-            return "converted"
-        else:
-            logging.error(f"⚠️ Output too small or missing for {file_path.name}")
-            return "failed"
-    except Exception as e:
-        logging.error(f"❌ Exception during conversion of {file_path.name}: {e}")
-        print(f"❌ Exception during conversion of {file_path.name}: {e}")
-        return "failed"
-
-def fix_audio(file_path):
-    temp_file = file_path.with_name(file_path.stem + "_audiofix" + file_path.suffix)
-    command = [
-        FFMPEG_PATH,
-        "-i", str(file_path),
-        "-map", "0",
-        "-c:v", "copy",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "-c:s", "copy",
-        str(temp_file)
-    ]
-    try:
-        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if temp_file.exists() and temp_file.stat().st_size > 1_000_000:
-            file_path.unlink()
-            temp_file.rename(file_path)
-            logging.info(f"✅ Replaced {file_path.name} with AAC audio version")
-            return "audio-fixed"
-        else:
-            logging.error(f"⚠️ Audio fix output invalid or too small for {file_path.name}")
-            return "failed"
-    except subprocess.CalledProcessError as e:
-        logging.error(f"❌ Failed to fix audio in {file_path.name}: {e}")
-        return "failed"
-
-def process_file(file_path):
-    if not file_path.exists() or file_path.suffix.lower() not in VALID_EXTENSIONS:
-        return "skipped"
-
-    file_id = str(file_path.resolve())
-    if file_id in PROCESSED_FILES:
-        return "skipped"
-
-    cleaned_path = clean_filename(file_path)
-    video_codec, audio_codec = get_codecs(cleaned_path)
+    print(f"🚀 [CONVERTING] {input_file.name}")
+    print(f"🎷 Audio: {'copy' if audio_codec == 'aac' else 'AAC re-encode'}")
+    print(f"📝 Subtitles: {'burned-in fallback' if is_fallback else ('burned-in forced' if forced_index >= 0 else 'none')} + {'soft full CC' if full_index >= 0 else 'no CC'}")
 
     if DRY_RUN:
-        if cleaned_path.suffix.lower() == ".mp4" and audio_codec != TARGET_AUDIO_CODEC:
-            print(f"🔁 [Dry Run] Would fix audio in MP4: {cleaned_path.name} (Audio: {audio_codec} → aac)")
-        elif cleaned_path.suffix.lower() == ".mkv":
-            print(f"🔁 [Dry Run] Would convert MKV: {cleaned_path.name} (Video: {video_codec} → h264, Audio: {audio_codec} → aac)")
-        return "dry-run"
+        print(f"🧪 DRY-RUN ONLY for {input_file.name}")
+        return True
 
-    if cleaned_path.suffix.lower() == ".mp4" and audio_codec != TARGET_AUDIO_CODEC:
-        tqdm.write(f"🔧 Fixing audio: {cleaned_path.name} (Audio: {audio_codec} → aac)")
-        result = fix_audio(cleaned_path)
-    elif cleaned_path.suffix.lower() == ".mkv":
-        tqdm.write(f"🔧 Converting: {cleaned_path.name} (Video: {video_codec} → h264, Audio: {audio_codec} → aac)")
-        result = convert_file(cleaned_path)
+    temp_file = input_file.with_suffix(".temp.mp4")
+    command = [FFMPEG_PATH, "-y", "-i", str(input_file)]
+    if forced_index >= 0:
+        input_ffmpeg_path = str(input_file).replace("\\", "/").replace(":", "\\:")
+        subtitle_filter = f"subtitles='{input_ffmpeg_path}':si={forced_index}:force_style='FontName=Arial'"
+        command += ["-vf", subtitle_filter, "-c:v", "libx264", "-crf", "23", "-preset", "veryfast"]
     else:
-        return "skipped"
+        command += ["-c:v", "copy"] if video_codec == "h264" else ["-c:v", "libx264", "-crf", "23", "-preset", "veryfast"]
 
-    if result in ["converted", "audio-fixed"]:
-        PROCESSED_FILES.add(file_id)
-        with open(STATE_LOG, "w") as f:
-            json.dump(sorted(PROCESSED_FILES), f, indent=2)
+    command += ["-c:a", "copy"] if audio_codec == "aac" else ["-c:a", "aac", "-b:a", "384k"]
+    command += ["-map", "0:v:0", "-map", "0:a:0"]
+    if full_index >= 0 and full_index != forced_index:
+        command += ["-map", f"0:s:{full_index}", "-scodec:s", "mov_text"]
+    command.append(str(temp_file))
 
-    return result
+    try:
+        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        shutil.move(str(temp_file), str(output_file))
+        input_file.unlink()
+        print(f"✅ [DONE] {input_file.name}")
+        return True
+    except Exception as e:
+        if LOGGING_ENABLED:
+            logging.error(f"❌ FFmpeg failed: {e}")
+        if temp_file.exists():
+            temp_file.unlink()
+        print(f"❌ [FAILED] {input_file.name}")
+        return False
 
-def remove_empty_dirs(folder: Path):
-    for dirpath, _, _ in os.walk(folder, topdown=False):
-        dir_ = Path(dirpath)
-        if not any(dir_.iterdir()):
+def move_file(src, dest):
+    if DRY_RUN:
+        print(f"🧪 DRY-RUN MOVE: {src} → {dest}")
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(src), str(dest))
+
+def flatten_and_clean_movies():
+    for mp4_file in SOURCE_MOVIES.rglob("*.mp4"):
+        dest_file = DEST_MOVIES / mp4_file.name
+        move_file(mp4_file, dest_file)
+
+    for dirpath, _, _ in os.walk(SOURCE_MOVIES, topdown=False):
+        if not os.listdir(dirpath):
             try:
-                dir_.rmdir()
-                logging.info(f"🧹 Removed empty folder: {dir_}")
-            except Exception as e:
-                logging.warning(f"⚠️ Could not remove folder {dir_}: {e}")
+                if not DRY_RUN:
+                    os.rmdir(dirpath)
+                print(f"🧹 Removed empty folder: {dirpath}")
+            except Exception:
+                pass
 
-def summarize_results(counts):
-    print("\n📊 Summary:")
-    print(f"   🔄 Dry-run conversions: {counts['dry-run']}")
-    print(f"   ✅ Converted files: {counts['converted']}")
-    print(f"   🎧 Audio fixed: {counts['audio-fixed']}")
-    print(f"   ⏭️ Skipped: {counts['skipped']}")
-    print(f"   ❌ Failed: {counts['failed']}")
+def preserve_structure_tv():
+    for mp4_file in SOURCE_TV.rglob("*.mp4"):
+        rel_path = mp4_file.relative_to(SOURCE_TV)
+        dest_path = DEST_TV / rel_path
+        move_file(mp4_file, dest_path)
+
+def convert_all():
+    all_files = list(SOURCE_MOVIES.rglob("*.mkv")) + list(SOURCE_TV.rglob("*.mkv"))
+    print(f"🎞️ Found {len(all_files)} MKV files to convert.")
+    results = []
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {executor.submit(convert_to_mp4, f): f for f in all_files}
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Converting", dynamic_ncols=True):
+            f = futures[future]
+            success = future.result()
+            if LOGGING_ENABLED:
+                conversion_log[str(f)] = "converted" if success else "error"
+            results.append(success)
+            save_log()
+    print(f"📊 Converted: {results.count(True)} | ❌ Failed: {results.count(False)}")
 
 def main():
-    all_files = []
-    for base in BASE_FOLDERS:
-        for ext in VALID_EXTENSIONS:
-            all_files.extend(base.rglob(f"*{ext}"))
-
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = {executor.submit(process_file, f): f for f in all_files}
-        counts = defaultdict(int)
-        for future in tqdm(as_completed(futures), total=len(futures), desc="Scanning Media"):
-            result = future.result()
-            counts[result] += 1
-
-    summarize_results(counts)
-
-    for folder in [Path(r"Z:\\Movies"), Path(r"I:\\Movies")]:
-        remove_empty_dirs(folder)
+    convert_all()
+    flatten_and_clean_movies()
+    preserve_structure_tv()
 
 if __name__ == "__main__":
     main()
-    print("✅ Dry run completed." if DRY_RUN else "✅ Conversion run completed.")
