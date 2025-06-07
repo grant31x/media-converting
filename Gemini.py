@@ -152,15 +152,16 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
     Determines the indices for forced subtitles (to be burned-in) and
     English soft subtitles (for optional display).
 
-    Prioritizes any forced subtitle for burn-in, then searches for a non-forced English subtitle.
-    PGS (image-based) subtitles are skipped.
+    Prioritizes any explicitly forced subtitle for burn-in, then any subtitle with "forced" in its title.
+    Separately, it finds the first non-forced English subtitle for soft-coding.
+    PGS (image-based) subtitles are skipped for both.
 
     Args:
         file_path: The Path object of the media file.
 
     Returns:
         A tuple containing:
-            - forced_burn_in_idx (int): Index of the first forced subtitle found, or -1 if none.
+            - forced_burn_in_idx (int): Index of the first forced subtitle found (any language), or -1 if none.
             - soft_english_cc_idx (int): Index of the first non-forced English subtitle found, or -1 if none.
     """
     forced_burn_in_idx = -1
@@ -171,18 +172,26 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
         tags = stream.get("tags", {})
         codec = stream.get("codec_name", "")
         lang = tags.get("language", "").lower()
+        title = tags.get("title", "").lower() 
         is_forced_tag = tags.get("forced") == "1"
 
         # Skip PGS (image-based) subtitles as they are difficult to burn in/convert
         if codec in ["pgs", "hdmv_pgs_subtitle"]:
             continue
 
-        # Find the first forced subtitle for burning in (any language)
-        if is_forced_tag and forced_burn_in_idx == -1:
-            forced_burn_in_idx = stream["index"]
-        # Find the first non-forced English subtitle for soft-coding
-        elif lang == "eng" and not is_forced_tag and soft_english_cc_idx == -1:
-            soft_english_cc_idx = stream["index"]
+        # Logic for finding forced subtitles (for burn-in) - checks ANY forced stream
+        if forced_burn_in_idx == -1: # Only assign if not already found
+            if is_forced_tag:
+                forced_burn_in_idx = stream["index"]
+            elif "forced" in title: # Fallback to title if not explicitly tagged
+                forced_burn_in_idx = stream["index"]
+
+        # Logic for finding soft English subtitles (for optional display)
+        # Must be English AND not the same as the forced subtitle (if found) AND not forced itself
+        if lang == "eng" and soft_english_cc_idx == -1 and stream["index"] != forced_burn_in_idx:
+            # Ensure it's not a forced stream itself if we consider 'forced' in title for burn-in
+            if not is_forced_tag and "forced" not in title:
+                soft_english_cc_idx = stream["index"]
 
     return forced_burn_in_idx, soft_english_cc_idx
 
@@ -266,7 +275,7 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
         # Properly escape path for FFmpeg subtitles filter on Windows
         input_ffmpeg_path = str(input_file).replace("\\", "/").replace(":", "\\:")
         subtitle_filter = f"subtitles='{input_ffmpeg_path}':si={forced_burn_in_idx}:force_style='FontName=Arial'"
-        command.extend(["-vf", subtitle_filter, "-c:v", "libx264", "-crf", "23", "-preset", "veryfast"]) # Changed to libx264 as libx64 is not standard
+        command.extend(["-vf", subtitle_filter, "-c:v", "libx264", "-crf", "23", "-preset", "veryfast"]) 
     else:
         # If no forced subtitle or if video is already H.264, copy video stream
         command.extend(["-c:v", "copy"] if video_codec == "h264" else ["-c:v", "libx264", "-crf", "23", "-preset", "veryfast"])
