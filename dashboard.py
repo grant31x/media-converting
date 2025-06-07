@@ -154,7 +154,6 @@ class Worker(QObject):
 
     def run(self):
         try:
-            # The target function now directly receives its arguments
             result = self.fn(*self.args, **self.kwargs)
             self.finished.emit(result)
         except Exception as e:
@@ -208,7 +207,6 @@ class MediaFileItemWidget(QFrame):
 
     def refresh_state(self):
         self.status_label.setText(f"Status: {self.media_file.status}")
-        current_view_index = self.stack.currentIndex()
         if getattr(self.media_file, 'is_editing_metadata', False):
             self.title_edit.setText(getattr(self.media_file, 'title', self.media_file.source_path.stem))
             self.media_type_combo.setCurrentText(getattr(self.media_file, 'media_type', 'Movie'))
@@ -225,7 +223,8 @@ class MediaFileItemWidget(QFrame):
             self.subs_details_label.setText(f"Subs Burned: {burned_sub} | Copied: {copied_subs}")
             self.stack.setCurrentIndex(1)
         else:
-            if current_view_index != 0: self.populate_selection_controls()
+            # FIX: Always populate controls when in the selection view
+            self.populate_selection_controls()
             self.stack.setCurrentIndex(0)
 
     def populate_selection_controls(self):
@@ -293,7 +292,6 @@ class Dashboard(QWidget):
         self.set_buttons_enabled(False)
         self.status_bar.showMessage(f"Running {task_function.__name__}...")
         self.thread = QThread()
-        # The Worker now correctly accepts *args and **kwargs for the target function
         self.worker = Worker(task_function, *args, **kwargs)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
@@ -306,35 +304,31 @@ class Dashboard(QWidget):
         self.thread.start()
 
     def set_buttons_enabled(self, enabled: bool):
-        # Disable all main action buttons while a task is running
         for btn in [self.convert_button, self.edit_metadata_button, self.transfer_button, self.findChild(QPushButton, "Scan Configured"), self.findChild(QPushButton, "Scan Custom...")]:
              if btn: btn.setEnabled(enabled)
-        # Cancel button is not used in this stable version
         self.cancel_button.setEnabled(False)
 
     def open_settings(self):
         SettingsWindow(self.config_handler, self).exec()
     
-    # FIX: This wrapper now calls the backend function directly without extra kwargs
-    def _scan_multiple_dirs(self, dir_paths: List[str]) -> List[MediaFile]:
+    def _scan_multiple_dirs(self, dir_paths: List[Path]) -> List[MediaFile]:
         """Wrapper to scan multiple directories."""
         all_files = []
         for dir_path in dir_paths:
-            # Assuming subtitlesmkv.scan_directory no longer needs a stop_check
-            all_files.extend(subtitlesmkv.scan_directory(Path(dir_path)))
+            all_files.extend(subtitlesmkv.scan_directory(dir_path))
         return all_files
 
     def scan_configured_folders(self):
         if not (dirs := self.config_handler.get_setting("scan_directories")):
             self.show_message("No Directories", "Add scan directories in Settings.")
             return
-        # Pass the 'dirs' list as a single argument
-        self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dirs)
+        dir_paths = [Path(d) for d in dirs]
+        self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dir_paths)
 
     def scan_custom_folder(self):
         if folder := QFileDialog.getExistingDirectory(self, "Select Folder"):
-            # Pass the folder in a list as a single argument
-            self._run_task(self._scan_multiple_dirs, self.on_scan_finished, [folder])
+            dir_paths = [Path(folder)]
+            self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dir_paths)
 
     def on_scan_finished(self, result: List[MediaFile]):
         self.media_files_data = result
@@ -374,7 +368,6 @@ class Dashboard(QWidget):
         except Exception as e:
             self.show_message("Error", f"Could not create output directory.\n{e}")
             return
-        # Pass arguments directly to the worker
         self._run_task(convert.convert_batch, self.on_action_finished, files, settings)
 
     def toggle_metadata_edit(self):
