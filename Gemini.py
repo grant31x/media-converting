@@ -55,7 +55,7 @@ def setup_logging():
   
         # IMPORTANT: Specify encoding='utf-8' for both handlers to support emojis and wide characters.
         logging.basicConfig(
-            level=logging.INFO, # Keep as INFO by default; user to manually change to DEBUG for debugging
+            level=logging.DEBUG, # Changed to DEBUG to show detailed logs for debugging
             format="%(asctime)s - %(levelname)s - %(message)s",
             handlers=[
                 logging.FileHandler(AppConfig.LOG_FILE_ACTIVITY, encoding='utf-8'), # Log to a file with UTF-8
