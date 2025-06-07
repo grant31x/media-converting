@@ -260,7 +260,7 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
         # Properly escape path for FFmpeg subtitles filter on Windows
         input_ffmpeg_path = str(input_file).replace("\\", "/").replace(":", "\\:")
         subtitle_filter = f"subtitles='{input_ffmpeg_path}':si={forced_burn_in_idx}:force_style='FontName=Arial'"
-        command.extend(["-vf", subtitle_filter, "-c:v", "libx264", "-crf", "23", "-preset", "veryfast"])
+        command.extend(["-vf", subtitle_filter, "-c:v", "libx64", "-crf", "23", "-preset", "veryfast"])
     else:
         # If no forced subtitle or if video is already H.264, copy video stream
         command.extend(["-c:v", "copy"] if video_codec == "h264" else ["-c:v", "libx264", "-crf", "23", "-preset", "veryfast"])
@@ -288,49 +288,60 @@ def convert_to_mp4(input_file: Path) -> bool:
     Returns:
         True if the conversion was successful, False otherwise.
     """
-    logging.info(f"🎬 Starting conversion of: {input_file.name} (Thread {threading.get_ident()})")
+    # File started message
+    logging.info(f"▶️ File: '{input_file.name}' - STARTED (Thread {threading.get_ident()})")
 
     output_file = input_file.with_suffix(".mp4")
     if output_file.exists():
-        logging.info(f"⏭️ Already converted: {output_file.name}")
+        logging.info(f"⏭️ File: '{input_file.name}' - Already converted to '{output_file.name}'")
         return True
 
     video_codec = get_video_codec(input_file)
     audio_codec = get_audio_codec(input_file)
     forced_burn_in_idx, soft_english_cc_idx = get_subtitle_indices(input_file)
 
-    logging.info(f"⚙️ Processing: {input_file.name}")
-    logging.info(f"🔊 Audio: {'copy' if audio_codec == 'aac' else 'AAC re-encode'}")
+    # Subtitle status message
+    sub_status = []
+    if forced_burn_in_idx >= 0:
+        sub_status.append(f"🔥 Burned-in Forced (Index: {forced_burn_in_idx})")
+    else:
+        sub_status.append("🚫 No Forced Burn-in")
 
-    sub_info = f"🔥 **Burned-in Forced Subtitles** (Stream Index: {forced_burn_in_idx})" if forced_burn_in_idx >= 0 else "🚫 No Forced Subtitles to Burn In"
-    soft_sub_info = f"💬 **Soft English Subtitles** (Stream Index: {soft_english_cc_idx})" if soft_english_cc_idx >= 0 else "❌ No Soft English Subtitles"
-    logging.info(f"📝 Subtitle Strategy: {sub_info}, {soft_sub_info}")
-
+    if soft_english_cc_idx >= 0:
+        sub_status.append(f"💬 Soft English (Index: {soft_english_cc_idx})")
+    else:
+        sub_status.append("❌ No Soft English")
+    
+    logging.info(f"📝 File: '{input_file.name}' - Subtitles: {' + '.join(sub_status)}")
 
     if AppConfig.DRY_RUN:
-        logging.info(f"🧪 DRY-RUN ONLY for {input_file.name}")
+        logging.info(f"🧪 File: '{input_file.name}' - DRY-RUN ONLY. No actual conversion will occur.")
         return True
 
     temp_file = input_file.with_suffix(".temp.mp4")
     command = _build_ffmpeg_command(input_file, video_codec, audio_codec, forced_burn_in_idx, soft_english_cc_idx)
     command.append(str(temp_file)) # Add output file to the command
 
+    # Converting message
+    logging.info(f"🔄 File: '{input_file.name}' - CONVERTING...")
+
     try:
         # Execute FFmpeg command, capturing output for detailed error logging
         result = subprocess.run(command, check=True, capture_output=True, text=True)
         shutil.move(str(temp_file), str(output_file))
         input_file.unlink() # Delete original MKV only after successful conversion and move
-        logging.info(f"✅ Successfully converted: {input_file.name} -> {output_file.name}")
+        # Done message with new name
+        logging.info(f"✅ File: '{input_file.name}' - DONE. Converted to: '{output_file.name}'")
         return True
     except FileNotFoundError:
-        logging.error(f"❌ FFmpeg not found at {AppConfig.FFMPEG_PATH}. Please check your path.")
+        logging.error(f"❌ File: '{input_file.name}' - FAILED. FFmpeg not found at {AppConfig.FFMPEG_PATH}. Please check your path.")
         return False
     except subprocess.CalledProcessError as e:
-        logging.error(f"❌ FFmpeg conversion failed for {input_file.name}. "
+        logging.error(f"❌ File: '{input_file.name}' - FAILED. FFmpeg conversion error. "
                       f"Return Code: {e.returncode}\nSTDOUT: {e.stdout.strip()}\nSTDERR: {e.stderr.strip()}")
         return False
     except Exception as e:
-        logging.error(f"❌ An unexpected error occurred during conversion of {input_file.name}: {e}")
+        logging.error(f"❌ File: '{input_file.name}' - FAILED. An unexpected error occurred: {e}")
         return False
     finally:
         # Ensure temporary file is always cleaned up
