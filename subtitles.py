@@ -1,5 +1,6 @@
 import subprocess
 import json
+from pathlib import Path
 
 def scan_subtitles(file_path: Path):
     try:
