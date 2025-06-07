@@ -203,53 +203,58 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
     """
     forced_burn_in_idx = -1
     soft_english_cc_idx = -1
-    all_english_streams_ids = [] # To keep track of all English streams for soft sub selection
+    english_streams_candidates = [] # To keep track of all English streams for soft sub selection
 
     # Get track information using mkvmerge
     mkvmerge_data = _run_media_probe(file_path, "s") # 's' indicates subtitle track request
     all_tracks = mkvmerge_data.get("tracks", [])
 
-    # First pass: Identify the forced subtitle for burn-in (highest priority: explicit 'forced' flag)
-    # mkvmerge outputs `id` as the track ID and `properties.forced_track` as a boolean
+    # First pass: Identify the forced subtitle for burn-in (highest priority: explicit 'forced_track' flag)
     for track in all_tracks:
         if track.get("type") != "subtitles":
             continue
 
         codec = track.get("properties", {}).get("codec_id", "").lower()
-        if codec in ["s_vobsub", "s_image", "s_hdpg", "s_hdmv/pgs"]: # Common PGS/image-based codecs
+        # Fixed: Robust check for PGS/image-based codecs
+        if "pgs" in codec or codec in {"s_vobsub", "s_image"}:
             continue
 
         if track.get("properties", {}).get("forced_track") is True:
             forced_burn_in_idx = track["id"]
             break # Found the primary forced track, no need to check further
 
-    # Second pass: Collect all English subtitle tracks and identify the soft English one
+    # Second pass: Collect all English subtitle tracks, prioritizing default track for soft_english_cc_idx
+    default_english_track_id = -1
     for track in all_tracks:
         if track.get("type") != "subtitles":
             continue
 
         codec = track.get("properties", {}).get("codec_id", "").lower()
-        if codec in ["s_vobsub", "s_image", "s_hdpg", "s_hdmv/pgs"]:
+        if "pgs" in codec or codec in {"s_vobsub", "s_image"}: # Fixed: Robust check for PGS/image-based codecs
             continue
 
         lang = track.get("properties", {}).get("language", "").lower()
+        is_default_track = track.get("properties", {}).get("default_track") is True
         
         if lang == "eng":
-            all_english_streams_ids.append(track["id"])
+            english_streams_candidates.append(track["id"])
+            if is_default_track and default_english_track_id == -1:
+                default_english_track_id = track["id"]
 
-    # Heuristic for forced burn-in if no explicit forced flag was found but there are English tracks
-    # This aligns with the user's scenario: first English track is the forced one.
-    if forced_burn_in_idx == -1 and len(all_english_streams_ids) > 0:
-        forced_burn_in_idx = all_english_streams_ids[0]
+    # Assign soft English subtitle:
+    # 1. If a default English track exists and it's not the forced track.
+    # 2. Otherwise, if there are English tracks, pick the first one that's not the forced track.
+    if default_english_track_id != -1 and default_english_track_id != forced_burn_in_idx:
+        soft_english_cc_idx = default_english_track_id
+    else:
+        for eng_id in english_streams_candidates:
+            if eng_id != forced_burn_in_idx:
+                soft_english_cc_idx = eng_id
+                break
 
-    # Find soft English subtitle: the first English track that is NOT the forced one
-    for eng_id in all_english_streams_ids:
-        if eng_id != forced_burn_in_idx:
-            soft_english_cc_idx = eng_id
-            break
-
-    # Final check: If only one relevant English track was found and used as forced, then no separate soft track
-    if soft_english_cc_idx == forced_burn_in_idx:
+    # Final check: If forced_burn_in_idx was assigned and soft_english_cc_idx ended up being the same
+    # (e.g., only one English track and it was deemed forced), clear soft_english_cc_idx.
+    if forced_burn_in_idx != -1 and soft_english_cc_idx == forced_burn_in_idx:
         soft_english_cc_idx = -1 
 
     return forced_burn_in_idx, soft_english_cc_idx
@@ -491,7 +496,7 @@ def convert_to_mp4(input_file: Path) -> Dict[str, Any] | None:
             "output_size_gb": 0.0, # No output size in dry run
             "subtitle_status": ' + '.join(sub_status_parts),
             "video_status_emoji": "📼" if video_reencoded_flag else "🎞️",
-            "audio_status_emoji": "🎶" if audio_reencoded_flag else "🎧",
+            "audio_status_emoji": "🎶" if audio_reencoded_flag else "�",
             "conversion_type": "dry_run"
         }
 
@@ -698,7 +703,6 @@ def _display_final_summary(successful_conversions: list[Dict[str, Any]], failed_
 
     for file_data in successful_conversions:
         original_path: Path = file_data["original_file_path"]
-        # Python 3.9+ original_path.is_relative_to()
         # For compatibility with Python < 3.9, check if parent is in parents
         if AppConfig.SOURCE_MOVIES in original_path.parents:
             converted_movies.append(file_data)
