@@ -18,7 +18,7 @@ class AppConfig:
     DRY_RUN: bool = True
     MAX_WORKERS: int = 3
     LOGGING_ENABLED: bool = True # Master toggle for all logging (true/false)
-    DEBUG_LOGGING_ENABLED: bool = True # Toggle for DEBUG level messages. If True, INFO messages are less 'pretty'.
+    DEBUG_LOGGING_ENABLED: bool = False # Toggle for DEBUG level messages. If True, INFO messages are less 'pretty'.
 
     # Paths to FFmpeg and FFprobe executables
     FFMPEG_PATH: Path = Path(r"C:\Programs2\ffmpeg\ffmpeg_essentials_build\bin\ffmpeg.exe")
