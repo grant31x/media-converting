@@ -18,9 +18,7 @@ class AppConfig:
     DRY_RUN: bool = True # Set to False for actual conversion, True for simulation
     MAX_WORKERS: int = 3
     LOGGING_ENABLED: bool = True # Master toggle for all logging (true/false)
-    DEBUG_LOGGING_ENABLED: bool = True # Toggle for DEBUG level messages. If True, INFO messages are less 'pretty'.
-    # Version tracking marker - this line is for Git detection
-    SCRIPT_VERSION: str = "2025-06-06_v5" # Minor non-functional change for Git detection
+    # DEBUG_LOGGING_ENABLED removed to simplify logging behavior
 
     # Paths to FFmpeg and FFprobe executables
     FFMPEG_PATH: Path = Path(r"C:\Programs2\ffmpeg\ffmpeg_essentials_build\bin\ffmpeg.exe")
@@ -41,7 +39,7 @@ class AppConfig:
     # Filename cleanup terms
     CLEANUP_TERMS: list[str] = [
         "1080p", "720p", "BluRay", "x264", "YTS", "BRRip", "WEBRip", "WEB-DL",
-        "HDRip", "DVDRip", "AAC", "5.1", "H264", "H265", "HEVC", # Added some new terms for Git detection
+        "HDRip", "DVDRip", "AAC", "5.1", "H264", "H265", "HEVC", 
         "DTS", "TrueHD", "Atmos", "REMUX", "AMZN", "NF", "UHD", "x265", "FHD"
     ]
 
@@ -66,8 +64,8 @@ def setup_logging():
         # Ensure log directory exists
         AppConfig.LOG_FILE_ACTIVITY.parent.mkdir(parents=True, exist_ok=True)
   
-        # Determine logging level based on DEBUG_LOGGING_ENABLED
-        log_level = logging.DEBUG if AppConfig.DEBUG_LOGGING_ENABLED else logging.INFO
+        # Set logging level to INFO (DEBUG messages will be suppressed)
+        log_level = logging.INFO
 
         # Set the root logger's level
         root_logger.setLevel(log_level)
@@ -91,22 +89,10 @@ def setup_logging():
 
 def _format_log_message(message: str) -> str:
     """
-    Formats log messages by conditionally removing emojis based on DEBUG_LOGGING_ENABLED.
+    Formats log messages by keeping emojis (as DEBUG_LOGGING_ENABLED is removed).
+    This function now acts as a pass-through for INFO messages, ensuring emojis are kept.
     """
-    if AppConfig.DEBUG_LOGGING_ENABLED:
-        # Regex to remove most common emojis
-        emoji_pattern = re.compile(
-            "["
-            "\U0001F600-\U0001F64F"  # emoticons
-            "\U0001F300-\U0001F5FF"  # symbols & pictographs
-            "\U0001F680-\U0001F6FF"  # transport & map symbols
-            "\U0001F1E0-\U0001F1FF"  # flags (iOS)
-            "\U00002702-\U000027B0"
-            "\U000024C2-\U0001F251"
-            "]+", flags=re.UNICODE
-        )
-        return emoji_pattern.sub(r'', message).strip()
-    return message # Return original message with emojis if not in debug mode
+    return message # Always return original message with emojis for INFO level.
 
 def save_log():
     """
@@ -224,8 +210,6 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
     mkvmerge_data = _run_media_probe(file_path, "s") # 's' indicates subtitle track request
     all_tracks = mkvmerge_data.get("tracks", [])
 
-    logging.debug(f"DEBUG: Subtitle tracks for {file_path.name} (from mkvmerge): {json.dumps(all_tracks, indent=2)}")
-
     # First pass: Identify the forced subtitle for burn-in (highest priority: explicit 'forced' flag)
     # mkvmerge outputs `id` as the track ID and `properties.forced_track` as a boolean
     for track in all_tracks:
@@ -234,12 +218,10 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
 
         codec = track.get("properties", {}).get("codec_id", "").lower()
         if codec in ["s_vobsub", "s_image", "s_hdpg", "s_hdmv/pgs"]: # Common PGS/image-based codecs
-            logging.debug(f"DEBUG: Skipping image-based subtitle track {track.get('id')} (codec: {codec})")
             continue
 
         if track.get("properties", {}).get("forced_track") is True:
             forced_burn_in_idx = track["id"]
-            logging.debug(f"DEBUG: Found explicitly forced subtitle track at ID: {forced_burn_in_idx}")
             break # Found the primary forced track, no need to check further
 
     # Second pass: Collect all English subtitle tracks and identify the soft English one
@@ -255,27 +237,22 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
         
         if lang == "eng":
             all_english_streams_ids.append(track["id"])
-            logging.debug(f"DEBUG: Added English stream candidate: {track['id']}")
 
     # Heuristic for forced burn-in if no explicit forced flag was found but there are English tracks
     # This aligns with the user's scenario: first English track is the forced one.
     if forced_burn_in_idx == -1 and len(all_english_streams_ids) > 0:
         forced_burn_in_idx = all_english_streams_ids[0]
-        logging.debug(f"DEBUG: Heuristic: Assigning first English stream ID {forced_burn_in_idx} as forced burn-in (as no explicit forced found).")
 
     # Find soft English subtitle: the first English track that is NOT the forced one
     for eng_id in all_english_streams_ids:
         if eng_id != forced_burn_in_idx:
             soft_english_cc_idx = eng_id
-            logging.debug(f"DEBUG: Found soft English subtitle at ID: {soft_english_cc_idx}")
             break
 
     # Final check: If only one relevant English track was found and used as forced, then no separate soft track
     if soft_english_cc_idx == forced_burn_in_idx:
         soft_english_cc_idx = -1 
-        logging.debug("DEBUG: Forced and soft English indices are the same, clearing soft_english_cc_idx.")
 
-    logging.debug(f"DEBUG: Final subtitle indices for {file_path.name}: Forced Burn-in: {forced_burn_in_idx}, Soft English: {soft_english_cc_idx}")
     return forced_burn_in_idx, soft_english_cc_idx
 
 # --- File Operations ---
@@ -338,7 +315,7 @@ def delete_sidecar_files(original_file_path: Path):
         # Add other common sidecar extensions here if needed, e.g., .idx, .sub, .ass
     ]
 
-    logging.debug(f"DEBUG: Attempting to clean sidecar files for {original_file_path.name}")
+    logging.info(_format_log_message(f"🗑️ Attempting to clean sidecar files for {original_file_path.name}..."))
     for f_path in files_to_delete:
         if f_path.exists():
             try:
@@ -347,7 +324,7 @@ def delete_sidecar_files(original_file_path: Path):
             except OSError as e:
                 logging.warning(_format_log_message(f"⚠️ Could not delete sidecar file {f_path.name}: {e}"))
         else:
-            logging.debug(f"DEBUG: Sidecar file not found: {f_path.name}")
+            logging.info(_format_log_message(f"🗑️ Sidecar file not found: {f_path.name}")) # Changed to INFO for better visibility when not debugging
 
 def move_file(src: Path, dest: Path):
     """
@@ -393,31 +370,31 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
     video_reencode_needed = False
     if forced_burn_in_idx >= 0:
         video_reencode_needed = True
-        logging.debug(f"DEBUG: Video re-encode needed for {input_file.name} due to forced subtitles.")
-
+        # logging.debug moved below after conditional message
+        
     if video_reencode_needed:
         input_ffmpeg_path = str(input_file).replace("\\", "/").replace(":", "\\:")
         subtitle_filter = f"subtitles='{input_ffmpeg_path}':si={forced_burn_in_idx}:force_style='FontName=Arial'"
         command.extend(["-vf", subtitle_filter, "-c:v", "libx265", "-crf", "28", "-preset", "medium"])
-        logging.debug(f"DEBUG: Video will be re-encoded to H.265 with burn-in for {input_file.name}.")
+        logging.info(_format_log_message(f"Video for {input_file.name} will be re-encoded to H.265 with burn-in."))
     elif video_codec == "hevc":
         command.extend(["-c:v", "copy"])
-        logging.debug(f"DEBUG: Video (HEVC) will be copied for {input_file.name}.")
+        logging.info(_format_log_message(f"Video for {input_file.name} (HEVC) will be copied."))
     elif video_codec == "h264":
         command.extend(["-c:v", "copy"])
-        logging.debug(f"DEBUG: Video (H.264) will be copied for {input_file.name}.")
+        logging.info(_format_log_message(f"Video for {input_file.name} (H.264) will be copied."))
     else:
         # Catch other less common video codecs and re-encode to H.265
         command.extend(["-c:v", "libx265", "-crf", "28", "-preset", "medium"])
-        logging.debug(f"DEBUG: Video (unknown codec '{video_codec}') will be re-encoded to H.265 for {input_file.name}.")
+        logging.info(_format_log_message(f"Video for {input_file.name} (unknown codec '{video_codec}') will be re-encoded to H.265."))
 
     # AUDIO ENCODING STRATEGY: Always output AAC (640k)
     if audio_codec == "aac": # If source is already AAC, copy it
         command.extend(["-c:a", "copy"])
-        logging.debug(f"DEBUG: Audio (AAC) will be copied for {input_file.name}.")
+        logging.info(_format_log_message(f"Audio for {input_file.name} (AAC) will be copied."))
     else: # Re-encode all other audio formats to high-quality AAC
         command.extend(["-c:a", "aac", "-b:a", "640k"]) # High-quality AAC
-        logging.debug(f"DEBUG: Audio (unknown codec '{audio_codec}') will be re-encoded to AAC 640k for {input_file.name}.")
+        logging.info(_format_log_message(f"Audio for {input_file.name} (codec '{audio_codec}') will be re-encoded to AAC 640k."))
 
     # Map video and audio streams
     command.extend(["-map", "0:v:0", "-map", "0:a:0"])
@@ -425,7 +402,7 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
     # Add soft English subtitles if found and not already burned-in
     if soft_english_cc_idx >= 0:
         command.extend(["-map", f"0:s:{soft_english_cc_idx}", "-scodec:s", "mov_text"])
-        logging.debug(f"DEBUG: Soft English subtitles (index {soft_english_cc_idx}) will be included for {input_file.name}.")
+        logging.info(_format_log_message(f"Soft English subtitles (index {soft_english_cc_idx}) will be included for {input_file.name}."))
 
     return command
 
@@ -527,7 +504,7 @@ def convert_to_mp4(input_file: Path) -> bool:
         if temp_file.exists():
             try:
                 temp_file.unlink()
-                logging.debug(f"🗑️ Cleaned up temporary file: {temp_file.name}")
+                logging.info(_format_log_message(f"🗑️ Cleaned up temporary file: {temp_file.name}")) # Changed to INFO
             except OSError as e:
                 logging.warning(_format_log_message(f"⚠️ Could not delete temporary file {temp_file.name}: {e}"))
 
