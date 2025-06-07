@@ -166,32 +166,66 @@ def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
     """
     forced_burn_in_idx = -1
     soft_english_cc_idx = -1
+    english_streams_candidates = [] # To keep track of English streams for heuristic
 
     data = _run_ffprobe(file_path, "s")
-    for stream in data.get("streams", []):
+    all_streams = data.get("streams", [])
+
+    # First pass: Prioritize finding any explicitly forced subtitle (highest priority for burn-in)
+    for stream in all_streams:
         tags = stream.get("tags", {})
         codec = stream.get("codec_name", "")
-        lang = tags.get("language", "").lower()
-        title = tags.get("title", "").lower() 
         is_forced_tag = tags.get("forced") == "1"
+        title = tags.get("title", "").lower()
 
-        # Skip PGS (image-based) subtitles as they are difficult to burn in/convert
         if codec in ["pgs", "hdmv_pgs_subtitle"]:
             continue
 
-        # Logic for finding forced subtitles (for burn-in) - checks ANY forced stream
-        if forced_burn_in_idx == -1: # Only assign if not already found
-            if is_forced_tag:
-                forced_burn_in_idx = stream["index"]
-            elif "forced" in title: # Fallback to title if not explicitly tagged
-                forced_burn_in_idx = stream["index"]
+        if is_forced_tag:
+            forced_burn_in_idx = stream["index"]
+            break # Found the primary forced stream, no need to check further for forced
 
-        # Logic for finding soft English subtitles (for optional display)
-        # Must be English AND not the same as the forced subtitle (if found) AND not forced itself
-        if lang == "eng" and soft_english_cc_idx == -1 and stream["index"] != forced_burn_in_idx:
-            # Ensure it's not a forced stream itself if we consider 'forced' in title for burn-in
-            if not is_forced_tag and "forced" not in title:
-                soft_english_cc_idx = stream["index"]
+    # Second pass: If no explicit forced subtitle, apply heuristics and find English soft tracks
+    if forced_burn_in_idx == -1:
+        # Fallback 1: Look for "forced" in title if no explicit 'forced' tag was found
+        for stream in all_streams:
+            tags = stream.get("tags", {})
+            codec = stream.get("codec_name", "")
+            title = tags.get("title", "").lower()
+
+            if codec in ["pgs", "hdmv_pgs_subtitle"]:
+                continue
+
+            if "forced" in title:
+                forced_burn_in_idx = stream["index"]
+                break # Assign and move on to find soft English
+
+    # Collect all English streams for soft subtitle consideration or heuristic forced
+    for stream in all_streams:
+        tags = stream.get("tags", {})
+        codec = stream.get("codec_name", "")
+        lang = tags.get("language", "").lower()
+
+        if codec in ["pgs", "hdmv_pgs_subtitle"]:
+            continue
+
+        if lang == "eng":
+            english_streams_candidates.append(stream["index"])
+
+    # Heuristic for forced burn-in if no explicit forced tag or title-based forced was found
+    if forced_burn_in_idx == -1 and len(english_streams_candidates) > 0:
+        # Common convention: the first English track is often the FFD (Forced Foreign Dialogue)
+        forced_burn_in_idx = english_streams_candidates[0]
+
+    # Find soft English subtitle: first English track that is NOT the forced one
+    for eng_idx in english_streams_candidates:
+        if eng_idx != forced_burn_in_idx:
+            soft_english_cc_idx = eng_idx
+            break
+
+    # Final check: If only one English track and it's chosen as forced, then no separate soft track
+    if soft_english_cc_idx == forced_burn_in_idx:
+        soft_english_cc_idx = -1 
 
     return forced_burn_in_idx, soft_english_cc_idx
 
