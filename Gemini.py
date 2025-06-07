@@ -73,13 +73,15 @@ def setup_logging():
         # Create and add file handler
         file_handler = logging.FileHandler(AppConfig.LOG_FILE_ACTIVITY, encoding='utf-8')
         file_handler.setLevel(log_level) # Explicitly set level for file handler
-        file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+        # Removed asctime and levelname from formatter as requested
+        file_handler.setFormatter(logging.Formatter("%(message)s")) 
         root_logger.addHandler(file_handler)
 
         # Create and add console handler
         console_handler = logging.StreamHandler(os.sys.stdout)
         console_handler.setLevel(log_level) # Explicitly set level for console handler
-        console_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+        # Removed asctime and levelname from formatter as requested
+        console_handler.setFormatter(logging.Formatter("%(message)s"))
         root_logger.addHandler(console_handler)
 
     else:
@@ -346,8 +348,22 @@ def move_file(src: Path, dest: Path):
         return
     try:
         dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(src), str(dest))
+        # Use robocopy for more robust file move on Windows
+        subprocess.run([
+            "robocopy",
+            str(src.parent), # Source directory
+            str(dest.parent), # Destination directory
+            src.name,         # File name to move
+            "/MOV",           # Move files and directories
+            "/NFL",           # No file list in output
+            "/NDL",           # No directory list in output
+            "/NJH",           # No job header
+            "/NJS",           # No job summary
+            "/NP"             # No progress
+        ], check=True, creationflags=subprocess.CREATE_NO_WINDOW) # Hide robocopy console window
         logging.info(_format_log_message(f"🚚 Moved: {src.name} to {dest}"))
+    except subprocess.CalledProcessError as e:
+        logging.error(_format_log_message(f"❌ Robocopy failed to move {src.name} to {dest}: {e.stderr.strip()}"))
     except Exception as e:
         logging.error(_format_log_message(f"❌ Failed to move {src.name} to {dest}: {e}"))
 
@@ -496,7 +512,7 @@ def convert_to_mp4(input_file: Path) -> Dict[str, Any] | None:
             "output_size_gb": 0.0, # No output size in dry run
             "subtitle_status": ' + '.join(sub_status_parts),
             "video_status_emoji": "📼" if video_reencoded_flag else "🎞️",
-            "audio_status_emoji": "🎶" if audio_reencoded_flag else "�",
+            "audio_status_emoji": "🎶" if audio_reencoded_flag else "🎧",
             "conversion_type": "dry_run"
         }
 
@@ -604,8 +620,22 @@ def move_file(src: Path, dest: Path):
         return
     try:
         dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(src), str(dest))
+        # Use robocopy for more robust file move on Windows
+        subprocess.run([
+            "robocopy",
+            str(src.parent), # Source directory
+            str(dest.parent), # Destination directory
+            src.name,         # File name to move
+            "/MOV",           # Move files and directories
+            "/NFL",           # No file list in output
+            "/NDL",           # No directory list in output
+            "/NJH",           # No job header
+            "/NJS",           # No job summary
+            "/NP"             # No progress
+        ], check=True, creationflags=subprocess.CREATE_NO_WINDOW) # Hide robocopy console window
         logging.info(_format_log_message(f"🚚 Moved: {src.name} to {dest}"))
+    except subprocess.CalledProcessError as e:
+        logging.error(_format_log_message(f"❌ Robocopy failed to move {src.name} to {dest}: {e.stderr.strip()}"))
     except Exception as e:
         logging.error(_format_log_message(f"❌ Failed to move {src.name} to {dest}: {e}"))
 
@@ -720,23 +750,33 @@ def _display_final_summary(successful_conversions: list[Dict[str, Any]], failed_
         for file_data in converted_movies:
             output_name = file_data.get("output_name", "N/A")
             output_size = file_data.get("output_size_gb", -1.0)
+            input_size = file_data.get("input_size_gb", -1.0) # Added for size comparison
             subtitle_status = file_data.get("subtitle_status", "N/A")
             video_status_emoji = file_data.get("video_status_emoji", "")
             audio_status_emoji = file_data.get("audio_status_emoji", "")
             
             output_size_display = ""
+            size_comparison_line = ""
+
             if file_data.get("conversion_type") == "dry_run":
                 output_size_display = "(DRY RUN - No Output)"
+                # Fixed: Dry run size comparison
+                size_comparison_line = f"🧪 Estimated: {input_size:.2f} GB → Expected: N/A GB" 
             elif file_data.get("conversion_type") == "skipped_already_converted":
                  output_size_display = f"({output_size:.2f} GB Existing)"
+                 # Fixed: Skipped size comparison
+                 size_comparison_line = f"({input_size:.2f} GB estimated → previously converted {output_size:.2f} GB)"
             else:
                  output_size_display = f"({output_size:.2f} GB)"
+                 # Fixed: Converted size comparison
+                 size_comparison_line = f"📦 {input_size:.2f} GB → {output_size:.2f} GB"
 
             # Fixed: Use AppConfig.DRY_RUN directly for prefix
             dry_run_prefix = "🧪 " if AppConfig.DRY_RUN else "" 
 
             logging.info(
                 f"{dry_run_prefix}✅ {output_name} {output_size_display}\n"
+                f"  {size_comparison_line}\n" # Added size comparison line
                 f"  Subtitles: {subtitle_status}\n"
                 f"  Video: {video_status_emoji} {'Re-encoded' if video_status_emoji == '📼' else 'Copied'}\n"
                 f"  Audio: {audio_status_emoji} {'Re-encoded' if audio_status_emoji == '🎶' else 'Copied'}"
@@ -747,23 +787,33 @@ def _display_final_summary(successful_conversions: list[Dict[str, Any]], failed_
         for file_data in converted_tv_shows:
             output_name = file_data.get("output_name", "N/A")
             output_size = file_data.get("output_size_gb", -1.0)
+            input_size = file_data.get("input_size_gb", -1.0) # Added for size comparison
             subtitle_status = file_data.get("subtitle_status", "N/A")
             video_status_emoji = file_data.get("video_status_emoji", "")
             audio_status_emoji = file_data.get("audio_status_emoji", "")
             
             output_size_display = ""
+            size_comparison_line = ""
+
             if file_data.get("conversion_type") == "dry_run":
                 output_size_display = "(DRY RUN - No Output)"
+                # Fixed: Dry run size comparison
+                size_comparison_line = f"🧪 Estimated: {input_size:.2f} GB → Expected: N/A GB" 
             elif file_data.get("conversion_type") == "skipped_already_converted":
                  output_size_display = f"({output_size:.2f} GB Existing)"
+                 # Fixed: Skipped size comparison
+                 size_comparison_line = f"({input_size:.2f} GB estimated → previously converted {output_size:.2f} GB)"
             else:
                  output_size_display = f"({output_size:.2f} GB)"
+                 # Fixed: Converted size comparison
+                 size_comparison_line = f"📦 {input_size:.2f} GB → {output_size:.2f} GB"
             
             # Fixed: Use AppConfig.DRY_RUN directly for prefix
             dry_run_prefix = "🧪 " if AppConfig.DRY_RUN else "" 
 
             logging.info(
                 f"{dry_run_prefix}✅ {output_name} {output_size_display}\n"
+                f"  {size_comparison_line}\n" # Added size comparison line
                 f"  Subtitles: {subtitle_status}\n"
                 f"  Video: {video_status_emoji} {'Re-encoded' if video_status_emoji == '📼' else 'Copied'}\n"
                 f"  Audio: {audio_status_emoji} {'Re-encoded' if audio_status_emoji == '🎶' else 'Copied'}"
