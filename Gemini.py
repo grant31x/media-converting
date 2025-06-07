@@ -16,7 +16,7 @@ class AppConfig:
     """
     Configuration settings for the media conversion script.
     """
-    DRY_RUN: bool = False # Set to False for actual conversion, True for simulation
+    DRY_RUN: bool = True # Set to False for actual conversion, True for simulation
     MAX_WORKERS: int = 3
     LOGGING_ENABLED: bool = True # Master toggle for all logging (true/false)
 
@@ -382,7 +382,12 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
     Returns:
         A list of strings representing the FFmpeg command.
     """
-    command = [str(AppConfig.FFMPEG_PATH), "-y", "-i", str(input_file)]
+    command = [
+        str(AppConfig.FFMPEG_PATH), "-y", 
+        "-probesize", "10M", # Increased probesize
+        "-analyzeduration", "10M", # Increased analyzeduration
+        "-i", str(input_file)
+    ]
 
     # VIDEO ENCODING STRATEGY:
     # 1. If forced subtitles are burned, video MUST be re-encoded to H.265.
@@ -411,17 +416,18 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
     else: # Re-encode all other audio formats to high-quality AAC
         command.extend(["-c:a", "aac", "-b:a", "640k"]) # High-quality AAC
 
-    # Map video and audio streams
-    # Explicitly map video and audio, and unmap all subtitle streams first
-    # This prevents FFmpeg from trying to process problematic unselected subtitle streams.
-    command.extend(["-map", "0:v:0", "-map", "0:a:0", "-map", "-0:s"]) 
+    # Map video and audio streams explicitly
+    # Do NOT use -map -0:s here, as it conflicts with subsequent specific subtitle maps.
+    command.extend(["-map", "0:v:0", "-map", "0:a:0"]) 
 
     # Add soft English subtitles if found and not already burned-in
     if soft_english_cc_idx >= 0:
-        command.extend(["-map", f"0:s:{soft_english_cc_idx}", "-scodec:s", "mov_text"])
+        command.extend(["-map", f"0:s:{soft_english_cc_idx}"])
+        # Ensure the soft subtitle is correctly set to mov_text codec for MP4 compatibility
+        command.extend(["-scodec:s", "mov_text"])
     else:
-        # If no soft English subtitles are explicitly mapped, the -map -0:s from above handles it.
-        pass
+        # If no soft English subtitles are needed, ensure no subtitle streams are output
+        command.extend(["-sn"]) # -sn: Suppress all subtitle streams in output if none are explicitly mapped
 
     return command
 
@@ -772,7 +778,7 @@ def _display_final_summary(successful_conversions: list[Dict[str, Any]], failed_
                  size_comparison_line = f"📦 {input_size:.2f} GB → {output_size:.2f} GB"
 
             # Fixed: Use AppConfig.DRY_RUN directly for prefix
-            dry_run_prefix = "🧪 " if AppConfig.DRY_RUN else "" 
+            dry_run_prefix = "� " if AppConfig.DRY_RUN else "" 
 
             logging.info(
                 f"{dry_run_prefix}✅ {output_name} {output_size_display}\n"
