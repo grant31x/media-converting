@@ -19,6 +19,7 @@ class AppConfig:
     DRY_RUN: bool = True # Set to False for actual conversion, True for simulation
     MAX_WORKERS: int = 3
     LOGGING_ENABLED: bool = True # Master toggle for all logging (true/false)
+    USE_NVENC: bool = True # Toggle for NVIDIA NVENC hardware acceleration (True/False)
 
     # Paths to FFmpeg and FFprobe executables
     FFMPEG_PATH: Path = Path(r"C:\Programs2\ffmpeg\ffmpeg_essentials_build\bin\ffmpeg.exe")
@@ -398,9 +399,9 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
     ]
 
     # VIDEO ENCODING STRATEGY:
-    # 1. If forced subtitles are burned, video MUST be re-encoded to H.265.
+    # 1. If forced subtitles are burned, video MUST be re-encoded to H.265 (NVENC or libx265).
     # 2. If no forced subtitles, prefer copying existing H.265 or H.264.
-    # 3. Otherwise (e.g., non-HEVC/H264 video, no forced subs), re-encode to H.265.
+    # 3. Otherwise (e.g., non-HEVC/H264 video, no forced subs), re-encode to H.265 (NVENC or libx265).
 
     video_reencode_needed = False
     if forced_burn_in_idx >= 0:
@@ -409,14 +410,24 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
     if video_reencode_needed:
         input_ffmpeg_path = str(input_file).replace("\\", "/").replace(":", "\\:")
         subtitle_filter = f"subtitles='{input_ffmpeg_path}':si={forced_burn_in_idx}:force_style='FontName=Arial'"
-        command.extend(["-vf", subtitle_filter, "-c:v", "libx265", "-crf", "28", "-preset", "medium"])
+        command.extend(["-vf", subtitle_filter]) # Add video filter for subtitles
+
+        if AppConfig.USE_NVENC:
+            # Use HEVC NVENC for hardware acceleration
+            command.extend(["-c:v", "hevc_nvenc", "-preset", "p5", "-cq", "20", "-tier", "high", "-rc:v", "vbr_hq"])
+        else:
+            # Fallback to software HEVC (libx265)
+            command.extend(["-c:v", "libx265", "-crf", "28", "-preset", "medium"])
     elif video_codec == "hevc":
         command.extend(["-c:v", "copy"])
     elif video_codec == "h264":
         command.extend(["-c:v", "copy"])
     else:
-        # Catch other less common video codecs and re-encode to H.265
-        command.extend(["-c:v", "libx265", "-crf", "28", "-preset", "medium"])
+        # Re-encode other unsupported video codecs
+        if AppConfig.USE_NVENC:
+            command.extend(["-c:v", "hevc_nvenc", "-preset", "p5", "-cq", "20", "-tier", "high", "-rc:v", "vbr_hq"])
+        else:
+            command.extend(["-c:v", "libx265", "-crf", "28", "-preset", "medium"])
 
     # AUDIO ENCODING STRATEGY: Always output AAC (640k)
     if audio_codec == "aac": # If source is already AAC, copy it
@@ -535,7 +546,7 @@ def convert_to_mp4(input_file: Path) -> Dict[str, Any] | None:
             "output_size_gb": 0.0, # No output size in dry run
             "subtitle_status": ' + '.join(sub_status_parts),
             "video_status_emoji": "📼" if video_reencoded_flag else "🎞️",
-            "audio_status_emoji": "🎶" if audio_reencoded_flag else "�",
+            "audio_status_emoji": "🎶" if audio_reencoded_flag else "🎧",
             "conversion_type": "dry_run"
         }
 
