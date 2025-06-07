@@ -16,7 +16,7 @@ class AppConfig:
     """
     Configuration settings for the media conversion script.
     """
-    DRY_RUN: bool = False # Set to False for actual conversion, True for simulation
+    DRY_RUN: bool = True # Set to False for actual conversion, True for simulation
     MAX_WORKERS: int = 3
     LOGGING_ENABLED: bool = True # Master toggle for all logging (true/false)
 
@@ -427,12 +427,18 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
     # Map video and audio streams explicitly
     command.extend(["-map", "0:v:0", "-map", "0:a:0"]) 
 
-    # Add soft English subtitles mapping if detected AND no forced subtitles are being burned
-    if soft_english_cc_idx >= 0 and forced_burn_in_idx == -1: 
-        command.extend(["-map", f"0:s:{soft_english_cc_idx}"])
-        command.extend(["-scodec:s", "mov_text"])
-    elif forced_burn_in_idx == -1 and soft_english_cc_idx == -1: # If NO subtitles (neither forced nor soft) are to be included
-        command.extend(["-sn"]) # -sn: Suppress all subtitle streams in output
+    # Handle subtitles:
+    # If forced subs are burned in, the -vf filter implicitly maps the chosen subtitle stream.
+    # If soft English subs are desired AND no forced subs are being burned: map that specific stream (optional).
+    # If no subtitles (neither forced nor soft) are to be included: use -sn to suppress all output subtitles.
+    if forced_burn_in_idx >= 0: # Forced subtitles are being burned in
+        # The -vf filter handles the subtitle stream from input; no separate -map 0:s:X needed
+        pass
+    elif soft_english_cc_idx >= 0: # No forced burn-in, but soft English subs are desired
+        command.extend(["-map", f"0:s:{soft_english_cc_idx}?"]) # Optional map for soft subtitle
+        command.extend(["-c:s", "mov_text"]) # Ensure codec is mov_text for MP4 compatibility
+    else: # Neither forced nor soft English subs are to be included
+        command.extend(["-sn"]) # Suppress all subtitle streams in output
 
     return command
 
@@ -529,7 +535,7 @@ def convert_to_mp4(input_file: Path) -> Dict[str, Any] | None:
             "output_size_gb": 0.0, # No output size in dry run
             "subtitle_status": ' + '.join(sub_status_parts),
             "video_status_emoji": "📼" if video_reencoded_flag else "🎞️",
-            "audio_status_emoji": "🎶" if audio_reencoded_flag else "🎧",
+            "audio_status_emoji": "🎶" if audio_reencoded_flag else "�",
             "conversion_type": "dry_run"
         }
 
