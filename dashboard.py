@@ -149,11 +149,10 @@ class Worker(QObject):
     finished = pyqtSignal(object)
     error = pyqtSignal(tuple)
 
-    def __init__(self, fn: Callable, *args, **kwargs):
+    def __init__(self, fn: Callable, **fn_kwargs):
         super().__init__()
         self.fn = fn
-        self.args = args
-        self.kwargs = kwargs
+        self.kwargs = fn_kwargs
         self._is_cancelled = False
 
     def run(self):
@@ -163,7 +162,7 @@ class Worker(QObject):
             if 'stop_check' in sig.parameters:
                 self.kwargs['stop_check'] = lambda: self._is_cancelled
             
-            result = self.fn(*self.args, **self.kwargs)
+            result = self.fn(**self.kwargs)
             if not self._is_cancelled:
                 self.finished.emit(result)
         except Exception as e:
@@ -304,12 +303,12 @@ class Dashboard(QWidget):
         bottom_controls.addWidget(self.cancel_button)
         self.layout.addLayout(bottom_controls)
 
-    def _run_task(self, task_function: Callable, on_finish: Callable, *args, **kwargs):
+    def _run_task(self, task_function: Callable, on_finish: Callable, **kwargs):
         self.set_buttons_enabled(False)
         self.status_bar.showMessage(f"Running {task_function.__name__}...")
         self.thread = QThread()
-        # FIX: The Worker now correctly accepts *args and **kwargs for the target function
-        self.worker = Worker(task_function, *args, **kwargs)
+        # The Worker now correctly accepts a dictionary of keyword arguments for the target function
+        self.worker = Worker(task_function, **kwargs)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.finished.connect(on_finish)
@@ -345,11 +344,11 @@ class Dashboard(QWidget):
         if not (dirs := self.config_handler.get_setting("scan_directories")):
             self.show_message("No Directories", "Add scan directories in Settings.")
             return
-        self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dirs)
+        self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dir_paths=dirs)
 
     def scan_custom_folder(self):
         if folder := QFileDialog.getExistingDirectory(self, "Select Folder"):
-            self._run_task(self._scan_multiple_dirs, self.on_scan_finished, [folder])
+            self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dir_paths=[folder])
 
     def on_scan_finished(self, result: List[MediaFile]):
         self.media_files_data = result
@@ -389,7 +388,7 @@ class Dashboard(QWidget):
         except Exception as e:
             self.show_message("Error", f"Could not create output directory.\n{e}")
             return
-        self._run_task(convert.convert_batch, self.on_action_finished, files, settings)
+        self._run_task(convert.convert_batch, self.on_action_finished, media_files=files, settings=settings)
 
     def toggle_metadata_edit(self):
         files_to_edit = self.get_selected_media_files()
@@ -411,7 +410,7 @@ class Dashboard(QWidget):
         for f in files_to_move:
             setattr(f, 'is_editing_metadata', False)
         self.refresh_ui()
-        self._run_task(robocopy.move_batch, self.on_action_finished, files_to_move)
+        self._run_task(robocopy.move_batch, self.on_action_finished, media_files=files_to_move)
     
     def on_action_finished(self, result: List[MediaFile]):
         self.refresh_ui()
