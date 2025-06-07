@@ -190,45 +190,44 @@ def get_video_codec(file_path: Path) -> str:
 
 def get_subtitle_indices(file_path: Path) -> Tuple[int, int]:
     """
-    Determines the indices for forced subtitles (to be burned-in) and
-    English soft subtitles (for optional display) using mkvmerge metadata,
-    following Plex-specific logic.
+    Determines the index for a forced English subtitle (to be burned-in) based on Plex requirements.
+    All other subtitle handling is skipped.
 
-    If any image-based subtitle (PGS, VobSub) is found, all subtitle processing
-    is skipped (returns -1, -1).
-    Only English forced subtitles are considered for burn-in. All other subtitle
-    streams are skipped.
+    If any image-based subtitle (PGS, VobSub) is found, all subtitle processing for this file
+    is explicitly skipped (returns -1, -1), allowing only video/audio conversion.
 
     Args:
         file_path: The Path object of the media file.
 
     Returns:
         A tuple containing:
-            - forced_burn_in_idx (int): Index of the forced English subtitle to burn in, or -1 if none found or if image-based subtitles are present.
-            - soft_english_cc_idx (int): Always -1 as per Plex requirement to skip other subtitles.
+            - forced_burn_in_idx (int): Index of the forced English, text-based subtitle to burn in.
+                                        Returns -1 if not found or if image-based subtitles are present.
+            - soft_english_cc_idx (int): Always -1, as per the requirement to skip all other subtitle streams.
     """
     forced_burn_in_idx = -1
     soft_english_cc_idx = -1 # Always -1 as per requirement: skip all other subtitle streams
 
     # Get track information using mkvmerge
-    mkvmerge_data = _run_media_probe(file_path, "s") # 's' indicates subtitle track request
+    mkvmerge_data = _run_media_probe(file_path, "s")
     all_tracks = mkvmerge_data.get("tracks", [])
 
-    # Check for image-based subtitles first and signal to skip all subtitle processing if found
+    # Check for image-based subtitles first and skip all subtitle processing if found
     for track in all_tracks:
         if track.get("type") == "subtitles":
             codec = track.get("properties", {}).get("codec_id", "").lower()
             if "pgs" in codec or codec in {"s_vobsub", "s_image"}:
-                logging.warning(_format_log_message(f"⚠️ File: '{file_path.name}' contains unsupported image-based subtitle (codec: {codec}). All subtitles will be ignored."))
-                return -1, -1 # Signal no subtitles to process at all
+                logging.warning(_format_log_message(f"⚠️ File: '{file_path.name}' contains unsupported image-based subtitle (codec: {codec}). All subtitles will be ignored for conversion."))
+                return -1, -1 # Signal no subtitles to process, but allow video/audio conversion
 
-    # If no image-based subtitles, proceed to find forced English for burn-in
+    # If no image-based subtitles, proceed to find a forced English, text-based subtitle for burn-in
     for track in all_tracks:
         if track.get("type") != "subtitles":
             continue
 
         codec = track.get("properties", {}).get("codec_id", "").lower()
-        if "pgs" in codec or codec in {"s_vobsub", "s_image"}: # Defensive check
+        # Ensure it's a text-based subtitle for burning
+        if not ("subrip" in codec or "text" in codec or "srt" in codec or "ass" in codec): # Add more text-based if needed
             continue
 
         lang = track.get("properties", {}).get("language", "").lower()
@@ -381,12 +380,13 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
         
     if video_reencode_needed:
         input_ffmpeg_path = str(input_file).replace("\\", "/").replace(":", "\\:")
-        subtitle_filter = f"subtitles='{input_ffmpeg_path}':si={forced_burn_in_idx}:force_style='FontName=Arial'"
+        # Explicitly specify the input stream for the subtitles filter
+        subtitle_filter = f"[0:s:{forced_burn_in_idx}]subtitles='{input_ffmpeg_path}':force_style='FontName=Arial'"
         command.extend(["-vf", subtitle_filter]) # Add video filter for subtitles
 
         if AppConfig.USE_NVENC:
             # Use HEVC NVENC for hardware acceleration
-            command.extend(["-c:v", "hevc_nvenc", "-preset", "p5", "-cq", "20", "-tier", "high", "-rc:v", "vbr_hq"])
+            command.extend(["-c:v", "hevc_nvenc", "-cq", "28", "-preset", "p5", "-tier", "high", "-rc:v", "vbr_hq"])
         else:
             # Fallback to software HEVC (libx265)
             command.extend(["-c:v", "libx265", "-crf", "28", "-preset", "medium"])
@@ -397,7 +397,7 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
     else:
         # Re-encode other unsupported video codecs if no burn-in
         if AppConfig.USE_NVENC:
-            command.extend(["-c:v", "hevc_nvenc", "-preset", "p5", "-cq", "20", "-tier", "high", "-rc:v", "vbr_hq"])
+            command.extend(["-c:v", "hevc_nvenc", "-cq", "28", "-preset", "p5", "-tier", "high", "-rc:v", "vbr_hq"])
         else:
             command.extend(["-c:v", "libx265", "-crf", "28", "-preset", "medium"])
 
@@ -408,13 +408,12 @@ def _build_ffmpeg_command(input_file: Path, video_codec: str, audio_codec: str, 
         command.extend(["-c:a", "aac", "-b:a", "640k"]) # High-quality AAC
 
     # Map video and audio streams explicitly
-    command.extend(["-map", "0:v:0", "-map", "0:a:0"]) 
+    command.extend(["-map", "0:v:0?", "-map", "0:a:0?"]) # Add '?' to make video/audio maps optional
 
     # SUBTITLE MAPPING STRATEGY (Plex Specific):
-    # Only map if forced subtitles are being burned in. Otherwise, suppress all.
+    # Only burn in forced English subtitles. Otherwise, suppress all subtitle streams.
     if forced_burn_in_idx >= 0: # Forced subtitle is being burned in
-        # The -vf filter handles the subtitle stream from input; no separate -map 0:s:X needed
-        # No soft subtitles are mapped as per the requirement
+        # The -vf filter handles the subtitle stream from input; no separate -map 0:s:X? needed here.
         pass
     else: # No forced subtitles to burn in (or image-based subs were detected earlier)
         command.extend(["-sn"]) # Suppress all subtitle streams in output
@@ -471,7 +470,7 @@ def convert_to_mp4(input_file: Path) -> Dict[str, Any] | None:
 
     video_codec = get_video_codec(input_file)
     audio_codec = get_audio_codec(input_file)
-    forced_burn_in_idx, soft_english_cc_idx = get_subtitle_indices(input_file) # soft_english_cc_idx will be -1 here
+    forced_burn_in_idx, soft_english_cc_idx = get_subtitle_indices(input_file) # soft_english_cc_idx will always be -1 here with Plex logic
 
     # Determine video re-encode status for logging
     video_reencoded_flag = False
