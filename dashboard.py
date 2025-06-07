@@ -2,14 +2,15 @@
 # This is the main PyQt6 GUI for the media conversion tool.
 
 import sys
+import json
 from pathlib import Path
-from typing import List, Callable, Tuple
+from typing import List, Callable, Tuple, Dict, Any
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, Qt
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QListWidget, QListWidgetItem,
     QLabel, QFileDialog, QFrame, QHBoxLayout, QComboBox, QCheckBox, QGroupBox,
-    QProgressBar, QMessageBox
+    QProgressBar, QMessageBox, QDialog, QDialogButtonBox
 )
 
 # --- Import all our backend modules ---
@@ -18,14 +19,126 @@ import subtitlesmkv
 import convert
 import robocopy
 
+# ==============================================================================
+# In a real project, the following class would be in: /utils/config.py
+# ==============================================================================
+class ConfigHandler:
+    """Handles loading and saving application settings to a JSON file."""
+    def __init__(self, config_path: str = "config.json"):
+        self.config_path = Path(config_path)
+        self.config: Dict[str, Any] = {}
+        self.default_config = {
+            "scan_directories": [
+                "E:/Movies",
+                "E:/TV Shows"
+            ]
+        }
+
+    def load_config(self):
+        """Loads configuration from the JSON file, or creates it with defaults."""
+        if not self.config_path.exists():
+            print("Config file not found, creating with defaults.")
+            self.config = self.default_config
+            self.save_config()
+        else:
+            try:
+                with open(self.config_path, "r", encoding="utf-8") as f:
+                    self.config = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                print("Error reading config file, loading defaults.")
+                self.config = self.default_config
+
+    def save_config(self):
+        """Saves the current configuration to the JSON file."""
+        try:
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                json.dump(self.config, f, indent=4)
+        except IOError as e:
+            print(f"Error saving config file: {e}")
+
+    def get_scan_dirs(self) -> List[str]:
+        """Returns the list of scan directories."""
+        return self.config.get("scan_directories", [])
+
+    def set_scan_dirs(self, dir_list: List[str]):
+        """Updates the list of scan directories."""
+        self.config["scan_directories"] = dir_list
+
+
+# ==============================================================================
+# In a real project, the following class would be in: settings_window.py
+# ==============================================================================
+class SettingsWindow(QDialog):
+    """A dialog window for managing application settings."""
+    def __init__(self, config_handler: ConfigHandler, parent=None):
+        super().__init__(parent)
+        self.config_handler = config_handler
+        self.setWindowTitle("Settings")
+        self.setMinimumWidth(500)
+
+        self.layout = QVBoxLayout(self)
+        
+        # Directory List
+        self.dir_list_widget = QListWidget()
+        self.layout.addWidget(QLabel("Scan Directories:"))
+        self.layout.addWidget(self.dir_list_widget)
+        
+        # Add/Remove Buttons
+        btn_layout = QHBoxLayout()
+        self.add_btn = QPushButton("Add Directory...")
+        self.remove_btn = QPushButton("Remove Selected")
+        btn_layout.addWidget(self.add_btn)
+        btn_layout.addWidget(self.remove_btn)
+        self.layout.addLayout(btn_layout)
+
+        # Dialog Buttons (Save/Cancel)
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        self.layout.addWidget(self.button_box)
+        
+        # --- Connections ---
+        self.add_btn.clicked.connect(self.add_directory)
+        self.remove_btn.clicked.connect(self.remove_directory)
+        self.button_box.accepted.connect(self.save_and_accept)
+        self.button_box.rejected.connect(self.reject)
+
+        self.load_settings()
+
+    def load_settings(self):
+        """Populates the UI with current settings from the config handler."""
+        self.dir_list_widget.clear()
+        for directory in self.config_handler.get_scan_dirs():
+            self.dir_list_widget.addItem(directory)
+
+    def add_directory(self):
+        """Opens a dialog to add a new scan directory."""
+        folder = QFileDialog.getExistingDirectory(self, "Select Directory to Add")
+        if folder:
+            self.dir_list_widget.addItem(folder)
+
+    def remove_directory(self):
+        """Removes the selected directory from the list."""
+        selected_items = self.dir_list_widget.selectedItems()
+        if not selected_items:
+            return
+        for item in selected_items:
+            self.dir_list_widget.takeItem(self.dir_list_widget.row(item))
+
+    def save_and_accept(self):
+        """Saves the settings and closes the dialog."""
+        new_dir_list = []
+        for i in range(self.dir_list_widget.count()):
+            new_dir_list.append(self.dir_list_widget.item(i).text())
+        
+        self.config_handler.set_scan_dirs(new_dir_list)
+        self.config_handler.save_config()
+        self.accept()
+
 
 class Worker(QObject):
-    """
-    A worker thread for running background tasks without freezing the GUI.
-    """
-    finished = pyqtSignal(object)  # Emits the result of the task
-    error = pyqtSignal(tuple)      # Emits a tuple of (exception_type, exception, traceback)
-    progress = pyqtSignal(int)     # Emits progress percentage
+    """A worker thread for running background tasks without freezing the GUI."""
+    finished = pyqtSignal(object)
+    error = pyqtSignal(tuple)
+    progress = pyqtSignal(int)
 
     def __init__(self, fn: Callable, *args, **kwargs):
         super().__init__()
@@ -35,8 +148,6 @@ class Worker(QObject):
 
     def run(self):
         try:
-            # Note: Progress reporting would need to be integrated into the backend functions.
-            # For now, this structure is ready for it.
             result = self.fn(*self.args, **self.kwargs)
             self.finished.emit(result)
         except Exception as e:
@@ -54,7 +165,6 @@ class MediaFileItemWidget(QFrame):
         self.layout = QVBoxLayout()
         self.layout.setContentsMargins(10, 5, 10, 5)
 
-        # Top section: Filename and Status
         top_layout = QHBoxLayout()
         self.filename_label = QLabel(f"<b>{self.media_file.filename}</b>")
         self.status_label = QLabel(f"Status: {self.media_file.status}")
@@ -63,10 +173,7 @@ class MediaFileItemWidget(QFrame):
         top_layout.addWidget(self.status_label)
         self.layout.addLayout(top_layout)
 
-        # Bottom section: Subtitle controls
         controls_layout = QHBoxLayout()
-        
-        # Burn-in selection
         burn_group = QGroupBox("Burn-in Subtitle (Hardsub)")
         burn_layout = QVBoxLayout()
         self.burn_combo = QComboBox()
@@ -79,7 +186,6 @@ class MediaFileItemWidget(QFrame):
         burn_group.setLayout(burn_layout)
         controls_layout.addWidget(burn_group)
         
-        # Soft-copy selection
         soft_copy_group = QGroupBox("Copy Subtitles (Softsub)")
         soft_copy_layout = QVBoxLayout()
         self.soft_copy_checkboxes: list[QCheckBox] = []
@@ -122,19 +228,26 @@ class Dashboard(QWidget):
         self.thread = None
         self.worker = None
 
+        # --- Settings and Configuration ---
+        self.config_handler = ConfigHandler()
+        self.config_handler.load_config()
+
         self.layout = QVBoxLayout(self)
 
+        # --- Top Control Buttons ---
         top_controls_layout = QHBoxLayout()
-        self.scan_button = QPushButton("1. Scan Media Folder")
-        self.scan_button.clicked.connect(self.scan_folder)
-        self.convert_button = QPushButton("2. Convert Selected Files")
-        self.convert_button.clicked.connect(self.start_conversion)
-        self.transfer_button = QPushButton("3. Transfer Converted Files")
-        self.transfer_button.clicked.connect(self.start_transfer)
+        self.scan_config_button = QPushButton("1a. Scan Configured Folders")
+        self.scan_custom_button = QPushButton("1b. Scan Custom Folder...")
+        self.convert_button = QPushButton("2. Convert Selected")
+        self.transfer_button = QPushButton("3. Transfer Converted")
+        self.settings_button = QPushButton("Settings")
         
-        top_controls_layout.addWidget(self.scan_button)
+        top_controls_layout.addWidget(self.scan_config_button)
+        top_controls_layout.addWidget(self.scan_custom_button)
         top_controls_layout.addWidget(self.convert_button)
         top_controls_layout.addWidget(self.transfer_button)
+        top_controls_layout.addStretch()
+        top_controls_layout.addWidget(self.settings_button)
         self.layout.addLayout(top_controls_layout)
 
         self.file_list = QListWidget()
@@ -143,6 +256,13 @@ class Dashboard(QWidget):
 
         self.progress_bar = QProgressBar()
         self.layout.addWidget(self.progress_bar)
+        
+        # --- Button Connections ---
+        self.scan_config_button.clicked.connect(self.scan_configured_folders)
+        self.scan_custom_button.clicked.connect(self.scan_custom_folder)
+        self.convert_button.clicked.connect(self.start_conversion)
+        self.transfer_button.clicked.connect(self.start_transfer)
+        self.settings_button.clicked.connect(self.open_settings)
 
     def _run_task(self, task_function: Callable, on_finish: Callable, *args):
         """Helper to run a function in a background thread."""
@@ -157,7 +277,6 @@ class Dashboard(QWidget):
         self.worker.finished.connect(on_finish)
         self.worker.error.connect(self.on_task_error)
         
-        # Clean up thread and worker
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
@@ -167,15 +286,40 @@ class Dashboard(QWidget):
 
     def set_buttons_enabled(self, enabled: bool):
         """Enable or disable the main action buttons."""
-        self.scan_button.setEnabled(enabled)
+        self.scan_config_button.setEnabled(enabled)
+        self.scan_custom_button.setEnabled(enabled)
         self.convert_button.setEnabled(enabled)
         self.transfer_button.setEnabled(enabled)
+        self.settings_button.setEnabled(enabled)
 
-    def scan_folder(self):
-        folder = QFileDialog.getExistingDirectory(self, "Select Media Folder")
+    def open_settings(self):
+        """Opens the settings dialog window."""
+        dialog = SettingsWindow(self.config_handler, self)
+        dialog.exec()
+        # No need to reload config here as the handler object is shared and updated directly.
+
+    def _scan_multiple_dirs(self, dir_paths: List[str]) -> List[MediaFile]:
+        """Wrapper function to scan multiple directories and aggregate results."""
+        all_media_files = []
+        for dir_path in dir_paths:
+            all_media_files.extend(subtitlesmkv.scan_directory(Path(dir_path)))
+        return all_media_files
+
+    def scan_configured_folders(self):
+        """Scans the list of folders saved in the configuration."""
+        configured_dirs = self.config_handler.get_scan_dirs()
+        if not configured_dirs:
+            self.show_message("No Directories Configured", "Please add scan directories in Settings.")
+            return
+        self.file_list.clear()
+        self._run_task(self._scan_multiple_dirs, self.on_scan_finished, configured_dirs)
+
+    def scan_custom_folder(self):
+        """Opens a dialog to select a single custom folder to scan."""
+        folder = QFileDialog.getExistingDirectory(self, "Select Custom Media Folder")
         if folder:
             self.file_list.clear()
-            self._run_task(subtitlesmkv.scan_directory, self.on_scan_finished, Path(folder))
+            self._run_task(self._scan_multiple_dirs, self.on_scan_finished, [folder])
 
     def on_scan_finished(self, result: List[MediaFile]):
         self.media_files_data = result
@@ -184,6 +328,7 @@ class Dashboard(QWidget):
         self.show_message("Scan Complete", f"Found {len(self.media_files_data)} MKV files.")
 
     def populate_file_list(self):
+        self.file_list.clear()
         for media_file in self.media_files_data:
             item_widget = MediaFileItemWidget(media_file)
             list_item = QListWidgetItem(self.file_list)
@@ -196,7 +341,6 @@ class Dashboard(QWidget):
     def _get_selected_media_files(self) -> List[MediaFile]:
         selected_files = []
         selected_items = self.file_list.selectedItems()
-
         if not selected_items and self.file_list.count() > 0:
             items_to_process = [self.file_list.item(i) for i in range(self.file_list.count())]
         else:
@@ -206,7 +350,6 @@ class Dashboard(QWidget):
             widget = self.file_list.itemWidget(item)
             widget.update_media_file_from_ui()
             selected_files.append(item.data(Qt.ItemDataRole.UserRole))
-                
         return selected_files
 
     def start_conversion(self):
@@ -228,7 +371,6 @@ class Dashboard(QWidget):
              self.show_message("No Files to Transfer", "No files have been successfully converted yet.")
              return
         
-        # Mockup for setting media type, a real app would have a UI for this.
         for mf in files_to_move:
             if "S0" in mf.filename and "E0" in mf.filename:
                 setattr(mf, "media_type", "tv")
@@ -247,18 +389,16 @@ class Dashboard(QWidget):
         self.show_message("Transfer Finished", "File transfer process has completed.")
 
     def update_statuses(self):
-        """Refreshes the status labels on all file widgets."""
         for i in range(self.file_list.count()):
             item = self.file_list.item(i)
             widget = self.file_list.itemWidget(item)
             widget.status_label.setText(f"Status: {widget.media_file.status}")
 
     def on_task_error(self, error: Tuple):
-        """Handles errors from the worker thread."""
         self.set_buttons_enabled(True)
         self.progress_bar.setValue(0)
         self.show_message("Error", f"An error occurred in the background task:\n{error[1]}")
-        print(error[2]) # Print full traceback to console
+        print(error[2])
 
     def show_message(self, title: str, message: str):
         msg_box = QMessageBox(self)

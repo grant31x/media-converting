@@ -9,6 +9,10 @@ from typing import List
 # Import the data models from our models.py file
 from models import MediaFile, SubtitleTrack
 
+# Centralized function for default scan directories
+def get_default_scan_directories() -> List[Path]:
+    return [Path("E:/Movies"), Path("E:/TVShows")]
+
 def scan_directory(directory_path: Path) -> List[MediaFile]:
     """
     Scans a directory recursively for .mkv files and processes each one.
@@ -125,26 +129,18 @@ if __name__ == "__main__":
     # IMPORTANT: You must have FFmpeg (and ffprobe) installed and accessible
     # in your system's PATH for this to work.
     
-    # Create a mock directory for the example
-    # In a real scenario, you would use a path like: Path("E:/Movies")
-    test_dir = Path("./__test_mkv_folder__")
+    test_dirs = get_default_scan_directories()
     try:
         print("--- Running subtitle scanner module in test mode ---")
-        
-        # Setup a dummy environment
-        test_dir.mkdir(exist_ok=True)
-        dummy_file_path = test_dir / "my_test_movie.mkv"
-        if not dummy_file_path.exists():
-            print(f"\nNOTE: Creating a dummy file at '{dummy_file_path}'.")
-            print("This script requires ffprobe to be installed to work on real files.")
-            dummy_file_path.touch()
 
-        # --- Test Case 1: Scanning a directory ---
-        print(f"\n1. Scanning directory '{test_dir}'...")
-        # Note: This will likely result in an error if the dummy file is empty,
-        # which correctly demonstrates the error handling.
-        media_files_list = scan_directory(test_dir)
-        
+        media_files_list = []
+        for test_dir in test_dirs:
+            if test_dir.exists():
+                print(f"\nScanning directory: {test_dir}")
+                media_files_list.extend(scan_directory(test_dir))
+            else:
+                print(f"\n⚠️ Directory does not exist: {test_dir}")
+
         print("\n2. Results of scan:")
         if not media_files_list:
             print("  No .mkv files were found or processed.")
@@ -154,7 +150,7 @@ if __name__ == "__main__":
                 print(f"    Status: {mf.status}")
                 if mf.error_message:
                     print(f"    Error: {mf.error_message}")
-                
+
                 if mf.subtitle_tracks:
                     print("    Subtitles Found:")
                     for sub in mf.subtitle_tracks:
@@ -165,8 +161,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\nAn error occurred during the test run: {e}")
     finally:
-        # Clean up the dummy file and directory
-        if dummy_file_path.exists():
-            dummy_file_path.unlink()
-        test_dir.rmdir()
         print("\n--- Test mode finished ---")
