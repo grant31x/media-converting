@@ -14,34 +14,34 @@ from models import MediaFile, SubtitleTrack
 MKVMERGE_PATH = Path("C:/Program Files/MKVToolNix/mkvmerge.exe")
 
 
-def scan_media_folders(dir_paths: List[Path]) -> List[MediaFile]:
+def scan_directory(directory_path: Path) -> List[MediaFile]:
     """
-    Scans a list of directories recursively for .mkv files and processes each one.
+    Scans a single directory recursively for .mkv files and processes each one.
 
     Args:
-        dir_paths: A list of Path objects for the root directories to scan.
+        directory_path: A Path object for the root directory to scan.
 
     Returns:
-        A list of MediaFile objects, each populated with subtitle data.
+        A list of MediaFile objects found in that directory.
     """
-    all_media_files = []
-    print("--- Starting Media Scan using mkvmerge ---")
+    media_files = []
+    print(f"--- Scanning directory with mkvmerge: {directory_path} ---")
     if not MKVMERGE_PATH.exists():
         print(f"[ERROR] mkvmerge.exe not found at the specified path: {MKVMERGE_PATH}")
         print("[ERROR] Please update the MKVMERGE_PATH in subtitlesmkv.py or install MKVToolNix.")
-        return all_media_files
+        return media_files
 
-    for dir_path in dir_paths:
-        print(f"Scanning directory: {dir_path}...")
-        if not dir_path.is_dir():
-            print(f"  -> Warning: Path is not a directory, skipping: {dir_path}")
-            continue
-        for file_path in dir_path.rglob("*.mkv"):
-            print(f"  Found file: {file_path.name}")
-            media_file = scan_file(file_path)
-            all_media_files.append(media_file)
-    print(f"--- Scan Complete. Found {len(all_media_files)} total MKV files. ---")
-    return all_media_files
+    if not directory_path.is_dir():
+        print(f"  -> Warning: Path is not a directory, skipping: {directory_path}")
+        return media_files
+
+    for file_path in directory_path.rglob("*.mkv"):
+        print(f"  Found file: {file_path.name}")
+        media_file = scan_file(file_path)
+        media_files.append(media_file)
+        
+    print(f"--- Scan of {directory_path} complete. Found {len(media_files)} files. ---")
+    return media_files
 
 
 def scan_file(file_path: Path) -> MediaFile:
