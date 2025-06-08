@@ -6,5 +6,6 @@
     "output_directory": "./converted",
     "use_nvenc": true,
     "delete_source_on_success": false,
-    "crf_value": 20
+    "crf_value": 20,
+    "use_two_pass": true
 }

@@ -1,9 +1,0 @@
-PS D:\Python\media-converting> & C:/Users/apgra/AppData/Local/Microsoft/WindowsApps/python3.11.exe d:/Python/media-converting/dashboard.py
-Traceback (most recent call last):
-  File "d:\Python\media-converting\dashboard.py", line 159, in run
-    result = self.fn(*self.args, **self.kwargs)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "d:\Python\media-converting\dashboard.py", line 336, in _scan_multiple_dirs
-    all_files.extend(subtitlesmkv.scan_directory(Path(dir_path), stop_check=lambda: False))
-                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-TypeError: scan_directory() got an unexpected keyword argument 'stop_check'

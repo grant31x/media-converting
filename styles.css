@@ -1,0 +1,133 @@
+/* styles.qss - Professional Dark Theme for Media Conversion Dashboard */
+
+/* --- General Window and Text --- */
+QWidget {
+    background-color: #1e2124; /* Very dark gray, almost black */
+    color: #e0e0e0; /* Off-white text for readability */
+    font-family: "Segoe UI", "Helvetica Neue", "Arial", sans-serif;
+    font-size: 10pt;
+}
+
+/* --- Buttons --- */
+QPushButton {
+    background-color: #0078d4; /* A slightly richer blue */
+    color: #ffffff;
+    border: 1px solid #005a9e; /* Darker blue border */
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #008cff; /* Lighter blue on hover */
+}
+
+QPushButton:pressed {
+    background-color: #005a9e; /* Darker blue when pressed */
+}
+
+QPushButton:disabled {
+    background-color: #444;
+    color: #888;
+    border: 1px solid #555;
+}
+
+/* --- List Widget where items are displayed --- */
+QListWidget {
+    background-color: #282b30; /* Darker mid-gray */
+    border: 1px solid #40444b;
+    border-radius: 4px;
+}
+
+/* --- Group Boxes for subtitle selection --- */
+QGroupBox {
+    background-color: transparent; /* Make it blend with the item background */
+    border: 1px solid #40444b;
+    border-radius: 4px;
+    margin-top: 10px;
+    padding: 20px 10px 10px 10px; /* Increased top padding to avoid smashing text */
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 5px;
+    color: #b0b0b0; /* Lighter gray for group titles */
+}
+
+/* Custom styling for the item container frame to give it a border */
+QFrame[objectName="MediaFileItemWidget"] {
+    border: 1px solid #40444b;
+    border-radius: 5px;
+    background-color: #36393f; /* Slightly lighter gray for each item */
+}
+
+
+/* --- Dropdowns and Checkboxes --- */
+QComboBox {
+    background-color: #1e2124;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 5px;
+}
+
+QComboBox::drop-down {
+    border: none;
+}
+
+QComboBox QAbstractItemView { /* Style the dropdown list itself */
+    background-color: #282b30;
+    border: 1px solid #555;
+    selection-background-color: #0078d4;
+}
+
+QCheckBox {
+    spacing: 8px;
+}
+
+/* --- Text/Number Inputs --- */
+QLineEdit, QTextEdit, QSpinBox {
+    background-color: #1e2124;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 5px;
+    color: #e0e0e0;
+}
+
+/* FIX: Improved SpinBox arrows */
+QSpinBox::up-button, QSpinBox::down-button {
+    subcontrol-origin: border;
+    width: 20px;
+    border-radius: 3px;
+    background-color: #36393f;
+    border: 1px solid #555;
+}
+QSpinBox::up-button { 
+    subcontrol-position: top right; 
+    image: url(C:/Users/apgra/Downloads/up-arrow.png); /* Replace with a path to your up arrow icon */
+}
+QSpinBox::down-button { 
+    subcontrol-position: bottom right; 
+    image: url(C:/Users/apgra/Downloads/down-arrow.png); /* Replace with a path to your down arrow icon */
+}
+
+
+/* --- Status Bar --- */
+QStatusBar {
+    background-color: #181a1d;
+}
+
+/* --- Dialog Windows --- */
+QDialog {
+    background-color: #282b30;
+}
+
+/* --- Context Menu --- */
+QMenu {
+    background-color: #282b30;
+    border: 1px solid #555;
+}
+
+QMenu::item:selected {
+    background-color: #0078d4;
+}

@@ -1,204 +1,156 @@
 # robocopy.py
-# This module handles the final transfer of converted media files to their destination.
+# This script provides a robust way to move .mp4 files from source drives
+# to a destination, preserving the directory structure using Robocopy.
 
-import shutil
+import subprocess
 import json
 from pathlib import Path
-from typing import List, Dict, Any
-
-# Import the data models. We assume the MediaFile object will be populated
-# with additional attributes like `media_type`, `title`, etc., before being passed here.
-from models import MediaFile
+import logging
+import argparse
+from datetime import datetime
 
 # --- Configuration ---
-# In a real application, these might be part of a settings class or config file.
-MOVIE_DESTINATION_BASE = Path("Z:/Movies")
-TV_SHOW_DESTINATION_BASE = Path("Z:/TV Shows")
-MOVE_LOG_FILE = Path("./move_log.json")
+# Set your source and destination base folders here
+SOURCE_FOLDERS = [
+    Path("E:/Movies"),
+    Path("E:/TV Shows")
+]
+DESTINATION_BASE = Path("Z:/")
+LOG_FILE = Path("./robocopy_log.json")
 
-def move_batch(media_files: List[MediaFile], dry_run: bool = False):
-    """
-    Processes a list of MediaFile objects, moving them to their final destination.
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    Args:
-        media_files: A list of converted MediaFile objects to move.
-        dry_run: If True, simulates the move without touching files.
-    """
-    print("--- Starting Final File Transfer ---")
-    move_log = _read_move_log()
-
-    for media in media_files:
-        # We only want to move files that were successfully converted.
-        if media.status != "Converted":
-            print(f"Skipping '{media.filename}' (status is '{media.status}', not 'Converted').")
-            continue
-        
-        move_converted_file(media, move_log, dry_run=dry_run)
-    
-    print("--- File Transfer Finished ---")
-
-def _read_move_log() -> Dict[str, Any]:
-    """Reads the move log JSON file."""
-    if not MOVE_LOG_FILE.exists():
+def read_move_log() -> dict:
+    """Reads the move log JSON file if it exists."""
+    if not LOG_FILE.exists():
         return {}
     try:
-        with open(MOVE_LOG_FILE, "r", encoding="utf-8") as f:
+        with open(LOG_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, IOError):
-        # If the log is corrupted or unreadable, start with a fresh one.
         return {}
 
-def _write_to_move_log(log_data: Dict[str, Any]):
+def write_move_log(log_data: dict):
     """Writes data to the move log JSON file."""
     try:
-        with open(MOVE_LOG_FILE, "w", encoding="utf-8") as f:
+        with open(LOG_FILE, "w", encoding="utf-8") as f:
             json.dump(log_data, f, indent=4)
     except IOError as e:
-        print(f"Error: Could not write to move log file: {e}")
+        logging.error(f"Could not write to log file: {e}")
 
-def move_converted_file(media: MediaFile, move_log: Dict[str, Any], dry_run: bool):
+def move_all_mp4s(source_base: Path, dest_base: Path, dry_run: bool = False):
     """
-    Moves a single converted file to its final destination based on its type.
+    Scans a source folder for .mp4 files and moves them to a destination,
+    mirroring the folder structure and using Robocopy.
 
     Args:
-        media: The MediaFile object for the converted file.
-        move_log: The dictionary tracking already moved files.
-        dry_run: If True, simulates the move.
+        source_base: The source directory to scan (e.g., E:/Movies).
+        dest_base: The destination root (e.g., Z:/).
+        dry_run: If True, simulates the move without actually moving files.
     """
-    source_path = media.destination_path # This is the output path from convert.py
+    logging.info(f"Scanning for .mp4 files in '{source_base}'...")
     
-    # --- Pre-move Checks ---
-    if not source_path or not source_path.exists():
-        media.status = "Error (Move)"
-        media.error_message = f"Source file not found at '{source_path}'."
-        print(f"Error: Cannot move '{media.filename}'. {media.error_message}")
+    mp4_files = list(source_base.rglob("*.mp4"))
+    if not mp4_files:
+        logging.info(f"No .mp4 files found in '{source_base}'.")
         return
 
-    if str(source_path) in move_log:
-        media.status = "Skipped (Moved)"
-        print(f"Skipping '{source_path.name}', already in move log.")
-        return
-
-    try:
-        # 1. Determine the final destination path
-        final_destination = _get_final_destination_path(media)
-        if not final_destination:
-            return # Error message is already set in media object by the helper
-
-        print(f"\nPlanning move for: {source_path.name}")
-        print(f"  -> Type: {getattr(media, 'media_type', 'N/A')}")
-        print(f"  -> Destination: {final_destination}")
-
-        if dry_run:
-            media.status = "Dry Run (Move)"
-            print("  -> Dry Run: Move not executed.")
-            return
-
-        # 2. Create the destination directory if it doesn't exist
-        final_destination.parent.mkdir(parents=True, exist_ok=True)
-        
-        # 3. Move the file
-        # shutil.move is a cut-and-paste operation.
-        # For more robust, resumable copies on Windows, a robocopy subprocess is a great alternative.
-        shutil.move(source_path, final_destination)
-        
-        media.status = "Transferred"
-        print(f"  -> Success: Moved file to '{final_destination}'")
-        
-        # 4. Update the log on success
-        move_log[str(source_path)] = {
-            "destination": str(final_destination),
-            "status": "Transferred"
-        }
-        _write_to_move_log(move_log)
-
-    except Exception as e:
-        media.status = "Error (Move)"
-        media.error_message = f"Failed to move file: {e}"
-        print(f"  -> Error: {media.error_message}")
-
-def _get_final_destination_path(media: MediaFile) -> Path | None:
-    """
-    Constructs the final, renamed path for a media file based on its type.
+    logging.info(f"Found {len(mp4_files)} .mp4 files. Preparing to move...")
+    move_log = read_move_log()
     
-    Returns:
-        A Path object for the final destination, or None if an error occurs.
-    """
-    try:
-        media_type = getattr(media, 'media_type')
-        title = getattr(media, 'title')
-        
-        if media_type == "movie":
-            return MOVIE_DESTINATION_BASE / f"{title}{media.destination_path.suffix}"
+    for source_path in mp4_files:
+        try:
+            # Determine the destination path by mirroring the structure
+            relative_path = source_path.relative_to(source_base)
+            dest_path = dest_base / source_base.name / relative_path
             
-        elif media_type == "tv":
-            season = getattr(media, 'season')
-            episode = getattr(media, 'episode')
-            season_folder = f"Season {season:02d}"
-            # e.g., "The Expanse S01E01.mp4"
-            file_name = f"{title} S{season:02d}E{episode:02d}{media.destination_path.suffix}"
-            return TV_SHOW_DESTINATION_BASE / title / season_folder / file_name
-        else:
-            media.error_message = f"Unknown media_type: '{media_type}'"
-            return None
+            # --- Check 1: Skip if already logged as moved ---
+            if str(source_path) in move_log and move_log[str(source_path)].get("status") == "Moved":
+                logging.info(f"Skipping logged file: {source_path.name}")
+                continue
 
-    except AttributeError as e:
-        media.status = "Error (Move)"
-        media.error_message = f"Missing required attribute for move: {e}"
-        print(f"Error: Cannot determine destination for '{media.filename}'. {media.error_message}")
-        return None
+            # --- Check 2: Skip if destination file exists and sizes match ---
+            if dest_path.exists():
+                if dest_path.stat().st_size == source_path.stat().st_size:
+                    logging.warning(f"Skipping '{source_path.name}' (file exists at destination with same size).")
+                    continue
+                else:
+                    logging.warning(f"Destination file '{dest_path.name}' exists but sizes differ. It will be overwritten.")
 
-# Example Usage:
+            # --- Dry Run ---
+            if dry_run:
+                print(f"[DRY RUN] Would move: '{source_path}' -> '{dest_path}'")
+                continue
+                
+            # Ensure the destination directory exists
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # --- Robocopy Command ---
+            # Using Robocopy to move a single file requires specifying the source and destination directories,
+            # and then the filename itself.
+            source_dir = str(source_path.parent)
+            dest_dir = str(dest_path.parent)
+            file_name = source_path.name
+
+            # /MOVE :: MOve files and dirs (delete from source after copying).
+            # /E    :: copy subdirectories, including Empty ones.
+            # /J    :: copy using unbuffered I/O (recommended for large files).
+            # /R:1  :: number of Retries on failed copies: default is 1 million. Set to 1.
+            # /W:1  :: Wait time between retries: default is 30 seconds. Set to 1.
+            command = [
+                "robocopy",
+                source_dir,
+                dest_dir,
+                file_name,
+                "/MOVE",
+                "/E",
+                "/J",
+                "/R:1",
+                "/W:1"
+            ]
+            
+            logging.info(f"Moving '{file_name}'...")
+            result = subprocess.run(command, capture_output=True, text=True)
+            
+            # Robocopy returns a success code (like 1) even on a successful move.
+            # A return code of >= 8 indicates a serious error.
+            if result.returncode >= 8:
+                raise subprocess.CalledProcessError(result.returncode, command, output=result.stdout, stderr=result.stderr)
+            
+            logging.info(f"Successfully moved '{dest_path.name}'")
+            move_log[str(source_path)] = {
+                "destination": str(dest_path),
+                "status": "Moved",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        except FileNotFoundError:
+            logging.error("robocopy.exe not found. Is it in your system's PATH?")
+            break # Stop processing if robocopy isn't available
+        except Exception as e:
+            logging.error(f"Failed to move '{source_path.name}': {e}")
+            move_log[str(source_path)] = {
+                "destination": str(dest_path),
+                "status": "Failed",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+        finally:
+            # Write the log after each file attempt
+            write_move_log(move_log)
+
+
 if __name__ == "__main__":
-    from models import SubtitleTrack, ConversionSettings # For creating test objects
-    
-    print("--- Running transfer module in test mode (Dry Run) ---")
-    
-    # 1. Setup mock environment
-    staging_dir = Path("./__converted_output__")
-    staging_dir.mkdir(exist_ok=True)
-    
-    # 2. Create mock MediaFile objects as they would be after conversion
-    
-    # --- MOVIE SCENARIO ---
-    movie_file = MediaFile(source_path=Path("dummy.mkv"))
-    movie_file.output_filename = "Dune Part Two (2024).mp4"
-    movie_file.destination_path = staging_dir / movie_file.output_filename
-    movie_file.destination_path.touch() # Create dummy file
-    movie_file.status = "Converted"
-    # Add the extra attributes needed for moving
-    setattr(movie_file, "media_type", "movie")
-    setattr(movie_file, "title", "Dune Part Two (2024)")
-    
-    # --- TV SHOW SCENARIO ---
-    tv_file = MediaFile(source_path=Path("dummy.mkv"))
-    tv_file.output_filename = "Shogun.S01E05.mp4"
-    tv_file.destination_path = staging_dir / tv_file.output_filename
-    tv_file.destination_path.touch() # Create dummy file
-    tv_file.status = "Converted"
-    # Add the extra attributes
-    setattr(tv_file, "media_type", "tv")
-    setattr(tv_file, "title", "Shōgun (2024)")
-    setattr(tv_file, "season", 1)
-    setattr(tv_file, "episode", 5)
+    parser = argparse.ArgumentParser(description="Move .mp4 files using Robocopy while preserving directory structure.")
+    parser.add_argument("--dry-run", action="store_true", help="Simulate the move without actually moving any files.")
+    args = parser.parse_args()
 
-    # --- FAILED CONVERSION SCENARIO ---
-    failed_file = MediaFile(source_path=Path("dummy.mkv"))
-    failed_file.status = "Error" # Should be skipped by the mover
+    if args.dry_run:
+        print("--- RUNNING IN DRY-RUN MODE ---")
 
-    # 3. Run the batch move
-    batch_list = [movie_file, tv_file, failed_file]
-    move_batch(batch_list, dry_run=True) # DRY RUN IS ON
+    for folder in SOURCE_FOLDERS:
+        move_all_mp4s(folder, DESTINATION_BASE, dry_run=args.dry_run)
     
-    # 4. Print final statuses
-    print("\n--- Final Statuses after Move ---")
-    for m in batch_list:
-        print(f"File: {m.filename}, Status: {m.status}")
-        if m.error_message:
-            print(f"  -> Message: {m.error_message}")
+    print("--- File transfer process complete. ---")
 
-    # 5. Cleanup
-    if MOVE_LOG_FILE.exists():
-        MOVE_LOG_FILE.unlink()
-    for f in staging_dir.glob("*"): f.unlink()
-    staging_dir.rmdir()

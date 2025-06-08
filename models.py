@@ -1,4 +1,5 @@
 # models.py
+# Version: 2.0
 # This file defines the data structures for the media conversion tool.
 
 import sys
@@ -7,26 +8,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Literal
 
-# Define custom types for clarity and type hinting
 SubtitleAction = Literal["burn", "copy", "ignore"]
 
 @dataclass
 class SubtitleTrack:
     """Represents a single subtitle track within a media file."""
-    index: int
-    ffmpeg_index: Optional[int] = None
-    language: str = "und"
-    title: Optional[str] = None
-    codec: Optional[str] = None
-    is_default: bool = False
-    is_forced: bool = False
-    action: SubtitleAction = "ignore" 
+    index: int; ffmpeg_index: Optional[int] = None; language: str = "und"; title: Optional[str] = None
+    codec: Optional[str] = None; is_default: bool = False; is_forced: bool = False
+    is_text_based: bool = False; action: SubtitleAction = "ignore" 
 
     def get_display_name(self) -> str:
-        """Generates a user-friendly name for the subtitle track."""
-        parts = [f"Track {self.index}"]
-        if self.ffmpeg_index is not None: parts.append(f"(s:{self.ffmpeg_index})")
-        parts.append(f"({self.language})")
+        parts = [f"Track {self.index}", f"({self.language})"];
         if self.title: parts.append(f"'{self.title}'")
         if self.is_forced: parts.append("[FORCED]")
         if self.is_default: parts.append("[DEFAULT]")
@@ -39,47 +31,95 @@ class MediaFile:
     filename: str = field(init=False)
     output_filename: str = field(init=False)
     destination_path: Optional[Path] = None
-    created_time: Optional[float] = None
-    modified_time: Optional[float] = None
+    
+    # NEW: Added more detailed metadata fields
+    container: str = "N/A"
+    video_codec: Optional[str] = None
+    video_width: int = 0
+    video_fps: float = 0.0
+    audio_codec: Optional[str] = None
+    audio_channels: int = 0
+    
     subtitle_tracks: List[SubtitleTrack] = field(default_factory=list)
     burned_subtitle: Optional[SubtitleTrack] = None
-    status: str = "Pending"
-    error_message: Optional[str] = None
-    has_forced_subtitles: bool = field(init=False, default=False)
-    needs_conversion: bool = True
-    original_size_mb: float = 0.0
-    converted_size_mb: float = 0.0
+    status: str = "Pending"; error_message: Optional[str] = None
+    has_forced_subtitles: bool = field(init=False, default=False); needs_conversion: bool = True
+    original_size_gb: float = 0.0; converted_size_gb: float = 0.0
+    use_basic_conversion: bool = False
 
     def __post_init__(self):
-        """Set dynamic fields after the object is initialized, including filename cleaning."""
         self.filename = self.source_path.name
         cleaned_stem = re.sub(r'[\[\]]', '', self.source_path.stem)
         self.output_filename = f"{cleaned_stem.strip()}.mp4"
         self.update_flags()
 
     def update_flags(self):
-        """Recalculates flags based on the current state of subtitle_tracks."""
         self.has_forced_subtitles = any(track.is_forced for track in self.subtitle_tracks)
         
+    def classify(self) -> str:
+        """Determines if a file should be remuxed or fully converted."""
+        if self.burned_subtitle: return "convert"
+        compatible_audio = ['aac', 'ac3', 'eac3']
+        if self.audio_codec and self.audio_codec.lower() not in compatible_audio: return "convert"
+        compatible_video = ['h264', 'hevc']
+        if self.video_codec and not any(c in self.video_codec.lower() for c in compatible_video): return "convert"
+        return "remux"
+
+    def generate_preview(self, settings: 'ConversionSettings') -> str:
+        """Generates a detailed, human-readable summary of the planned conversion."""
+        plan = []
+        plan.append("--- SOURCE FILE METADATA ---")
+        plan.append(f"  Container: {self.container}")
+        plan.append(f"  Size: {self.original_size_gb:.2f} GB")
+        plan.append(f"  Video: {self.video_codec}, {self.video_width}p, {self.video_fps:.2f} fps")
+        plan.append(f"  Audio: {self.audio_codec}, {self.audio_channels} channels")
+        plan.append("\n--- PLANNED CONVERSION ---")
+
+        conversion_type = self.classify()
+        plan.append(f"  Operation Type: {'Fast Remux' if conversion_type == 'remux' else 'Full Re-encode'}")
+
+        # Video Plan
+        if self.burned_subtitle:
+            video_plan = f"Re-encode to {settings.video_codec.upper()}"
+            if settings.use_two_pass:
+                video_plan += " (2-Pass)"
+        else:
+            video_plan = "Copy (remux)"
+        plan.append(f"  Video Action: {video_plan}")
+
+        # Audio Plan
+        compatible_audio = ['aac', 'ac3', 'eac3']
+        if self.audio_codec and self.audio_codec.lower() in compatible_audio and self.audio_channels >= 6:
+            audio_plan = f"Copy existing {self.audio_codec.upper()} stream"
+        else:
+            audio_plan = f"Re-encode to {settings.audio_codec.upper()} at {settings.audio_bitrate}"
+        plan.append(f"  Audio Action: {audio_plan}")
+
+        # Subtitle Plan
+        burned = self.burned_subtitle.get_display_name() if self.burned_subtitle else "None"
+        plan.append(f"  Subtitles to Burn: {burned}")
+        
+        copied = [s.get_display_name() for s in self.subtitle_tracks if s.action == 'copy']
+        plan.append(f"  Subtitles to Copy: {', '.join(copied) if copied else 'None'}")
+        
+        plan.append("\n--- OUTPUT ---")
+        plan.append(f"  Container: .mp4")
+        plan.append(f"  Output Path: {self.source_path.with_suffix('.mp4')}")
+        
+        return "\n".join(plan)
+
     def __str__(self) -> str:
         return f"{self.filename} ({len(self.subtitle_tracks)} subs) → {self.output_filename}"
 
     @property
     def size_change_percent(self) -> float:
-        """Calculates the percentage change in file size after conversion."""
-        if not self.original_size_mb or not self.converted_size_mb: return 0.0
-        return ((self.converted_size_mb - self.original_size_mb) / self.original_size_mb) * 100
+        if not self.original_size_gb or not self.converted_size_gb: return 0.0
+        return ((self.converted_size_gb - self.original_size_gb) / self.original_size_gb) * 100
 
 @dataclass
 class ConversionSettings:
     """Stores global settings for the conversion process."""
-    use_nvenc: bool = True
-    video_codec: str = "hevc_nvenc"
-    audio_codec: str = "aac"
-    audio_bitrate: str = "320k"
-    preset: str = "p7"
-    crf: int = 23
-    output_directory: Path = Path("./converted")
-    dry_run: bool = False
-    # FIX: Added the missing field to match the settings UI
+    use_nvenc: bool = True; use_two_pass: bool = True; video_codec: str = "hevc_nvenc"
+    audio_codec: str = "ac3"; audio_bitrate: str = "640k"; preset: str = "p7"
+    crf: int = 23; output_directory: Path = Path("./converted"); dry_run: bool = False
     delete_source_on_success: bool = False

@@ -1,109 +1,148 @@
 # subtitlesmkv.py
-# This module scans media files to extract subtitle track information using mkvmerge.
+# Version: 2.0
+# This module scans media files and extracts subtitle track information or snippets.
 
 import subprocess
 import json
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
+import logging
+import re
+try:
+    from langdetect import detect, DetectorFactory
+    # Ensure consistent results from langdetect
+    DetectorFactory.seed = 0
+    LANGDETECT_AVAILABLE = True
+except ImportError:
+    LANGDETECT_AVAILABLE = False
+    logging.warning("langdetect library not found. Language detection will be skipped. Run 'pip install langdetect'")
+
 
 # Import the data models from our models.py file
 from models import MediaFile, SubtitleTrack
 
 # --- Configuration for MKVToolNix ---
-# Define the path to mkvmerge.exe. Update this if your installation is different.
-MKVMERGE_PATH = Path("C:/Program Files/MKVToolNix/mkvmerge.exe")
+MKVTOOLNIX_PATH = Path("C:/Program Files/MKVToolNix/")
+MKVMERGE_PATH = MKVTOOLNIX_PATH / "mkvmerge.exe"
+MKVEXTRACT_PATH = MKVTOOLNIX_PATH / "mkvextract.exe"
 
 
 def scan_directory(directory_path: Path) -> List[MediaFile]:
-    """
-    Scans a single directory recursively for .mkv files and processes each one.
-
-    Args:
-        directory_path: A Path object for the root directory to scan.
-
-    Returns:
-        A list of MediaFile objects found in that directory.
-    """
+    """Scans a single directory recursively for .mkv files."""
     media_files = []
-    print(f"--- Scanning directory with mkvmerge: {directory_path} ---")
     if not MKVMERGE_PATH.exists():
-        print(f"[ERROR] mkvmerge.exe not found at the specified path: {MKVMERGE_PATH}")
-        print("[ERROR] Please update the MKVMERGE_PATH in subtitlesmkv.py or install MKVToolNix.")
+        print(f"[ERROR] mkvmerge.exe not found at: {MKVMERGE_PATH}")
         return media_files
-
     if not directory_path.is_dir():
-        print(f"  -> Warning: Path is not a directory, skipping: {directory_path}")
         return media_files
 
     for file_path in directory_path.rglob("*.mkv"):
-        print(f"  Found file: {file_path.name}")
-        media_file = scan_file(file_path)
-        media_files.append(media_file)
-        
-    print(f"--- Scan of {directory_path} complete. Found {len(media_files)} files. ---")
+        media_files.append(scan_file(file_path))
     return media_files
 
 
 def scan_file(file_path: Path) -> MediaFile:
-    """
-    Scans a single MKV file for subtitle tracks using mkvmerge.
-    """
+    """Scans a single MKV file for subtitle and audio tracks using mkvmerge."""
     media = MediaFile(source_path=file_path)
     media.status = "Scanning"
-    
     try:
-        # Command to get JSON identification from mkvmerge
-        cmd = [
-            str(MKVMERGE_PATH),
-            "-J", # Output in JSON format
-            str(file_path)
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, encoding='utf-8')
-        
-        # DEBUGGING: Print the raw mkvmerge output to the console.
-        print(f"    mkvmerge output for '{file_path.name}':\n    {result.stdout.strip()}")
-
+        cmd = [str(MKVMERGE_PATH), "-J", str(file_path)]
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding='utf-8')
         data = json.loads(result.stdout)
         
         subtitle_ffmpeg_index = 0
-        for track in data.get("tracks", []):
-            if track.get("type") == "subtitles":
-                properties = track.get("properties", {})
-                
-                new_track = SubtitleTrack(
-                    index=track.get("id"), # This is the mkvmerge track ID
-                    ffmpeg_index=subtitle_ffmpeg_index,
-                    language=properties.get("language", "und"),
-                    title=properties.get("track_name"),
-                    codec=track.get("codec"),
-                    is_default=properties.get("default_track", False),
-                    is_forced=properties.get("forced_track", False)
-                )
-                media.subtitle_tracks.append(new_track)
-                subtitle_ffmpeg_index += 1 # Increment only for subtitle tracks
+        audio_tracks_found, video_tracks_found = [], []
+        
+        media.container = data.get("container", {}).get("type", "Unknown")
 
-        if not media.subtitle_tracks:
-            print(f"    -> No subtitle streams found by mkvmerge.")
+        for track in data.get("tracks", []):
+            properties = track.get("properties", {})
+            if track.get("type") == "video":
+                video_tracks_found.append({
+                    'codec': track.get("codec"),
+                    'width': properties.get("pixel_dimensions", "0x0").split('x')[0],
+                    'fps': properties.get("video_frames_per_second", 0.0)
+                })
+            elif track.get("type") == "audio":
+                audio_tracks_found.append({
+                    'codec': track.get("codec"),
+                    'channels': properties.get("audio_channels"),
+                    'is_default': properties.get("default_track", False)
+                })
+            elif track.get("type") == "subtitles":
+                media.subtitle_tracks.append(SubtitleTrack(
+                    index=track.get("id"), ffmpeg_index=subtitle_ffmpeg_index,
+                    language=properties.get("language", "und"), title=properties.get("track_name"),
+                    codec=track.get("codec"), is_default=properties.get("default_track", False),
+                    is_forced=properties.get("forced_track", False), is_text_based=properties.get("text_subtitles", False) 
+                ))
+                subtitle_ffmpeg_index += 1
+
+        if video_tracks_found:
+            primary_video = video_tracks_found[0]
+            media.video_codec = primary_video['codec']
+            media.video_width = int(primary_video['width'])
+            media.video_fps = primary_video['fps']
+        
+        if audio_tracks_found:
+            primary_audio = next((t for t in audio_tracks_found if t['is_default']), audio_tracks_found[0])
+            media.audio_codec = primary_audio['codec']
+            media.audio_channels = primary_audio['channels']
 
         media.update_flags()
-
-        # Auto-select forced English subtitle
         for track in media.subtitle_tracks:
             if track.language == "eng" and track.is_forced:
-                track.action = "burn"
-                media.burned_subtitle = track
-                print(f"    -> Auto-selected forced subtitle: {track.get_display_name()}")
+                track.action = "burn"; media.burned_subtitle = track
                 break
         media.status = "Ready"
-
-    except FileNotFoundError:
-        media.status = "Error"
-        media.error_message = f"mkvmerge.exe not found at path: {MKVMERGE_PATH}. Please check the path in subtitlesmkv.py."
-    except subprocess.CalledProcessError as e:
-        media.status = "Error"
-        media.error_message = f"mkvmerge failed. Stderr: {e.stderr.strip()}"
     except Exception as e:
-        media.status = "Error"
-        media.error_message = f"An unexpected error occurred during scan: {e}"
-
+        media.status = "Error"; media.error_message = f"Scan error: {e}"
     return media
+
+def get_subtitle_details(mkv_file: Path, track_id: int) -> Tuple[str, str]:
+    """
+    Extracts a subtitle snippet and detects its language.
+    """
+    if not MKVEXTRACT_PATH.exists():
+        return f"Error: mkvextract.exe not found.", "unknown"
+
+    temp_srt_path = mkv_file.with_name(f"{mkv_file.stem}_preview_{track_id}.srt")
+    
+    try:
+        command = [str(MKVEXTRACT_PATH), "tracks", str(mkv_file), f"{track_id}:{temp_srt_path}"]
+        subprocess.run(command, check=True, capture_output=True, text=True, encoding='utf-8')
+
+        with open(temp_srt_path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+        
+        text_lines = [line.strip() for line in content.splitlines() if not re.match(r'^\d+$', line.strip()) and '-->' not in line]
+        clean_text = "\n".join(text_lines)
+        
+        if not clean_text:
+            return "No text found in track.", "unknown"
+
+        detected_lang = "n/a"
+        if LANGDETECT_AVAILABLE:
+            try:
+                detected_lang = detect(clean_text)
+            except Exception as e:
+                detected_lang = f"detection_failed ({e})"
+
+        snippet = "\n".join(text_lines[:10])
+        
+        return snippet, detected_lang
+
+    except Exception as e:
+        logging.error(f"Error getting subtitle details for track {track_id}: {e}")
+        return f"Error extracting subtitle preview: {e}", "error"
+    finally:
+        if temp_srt_path.exists():
+            temp_srt_path.unlink()
+
+def verify_subtitle_language_is_english(mkv_file: Path, track_id: int) -> bool:
+    """Uses the new details function to perform a simple boolean check."""
+    if not LANGDETECT_AVAILABLE:
+        return True # Skip check if library is not installed
+
+    _snippet, detected_lang = get_subtitle_details(mkv_file, track_id)
+    return detected_lang == 'en'
