@@ -1,5 +1,5 @@
 # dashboard.py
-# Version: 2.4
+# Version: 2.7
 # This is the main PyQt6 GUI for the media conversion tool. It orchestrates the scanning,
 # user selection, conversion, and file transfer processes by calling the other backend modules.
 
@@ -25,6 +25,32 @@ import robocopy
 import basic_convert
 import mkv_modifier
 
+# --- Dialog for Renaming Files ---
+class RenameDialog(QDialog):
+    def __init__(self, current_filename: str, current_title: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Rename File")
+        self.layout = QVBoxLayout(self)
+
+        self.layout.addWidget(QLabel("Output Filename:"))
+        self.filename_edit = QLineEdit(current_filename)
+        self.layout.addWidget(self.filename_edit)
+
+        self.layout.addWidget(QLabel("Metadata Title (Optional):"))
+        self.title_edit = QLineEdit(current_title)
+        self.layout.addWidget(self.title_edit)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        self.layout.addWidget(self.button_box)
+
+    def get_names(self) -> Tuple[str, str] | None:
+        if self.exec() == QDialog.DialogCode.Accepted:
+            return self.filename_edit.text(), self.title_edit.text()
+        return None
+
+# --- Main Application Classes ---
 class ConfigHandler:
     def __init__(self, config_path: str = "config.json"):
         self.config_path = Path(config_path); self.config: Dict[str, Any] = {}; self.default_config = {"scan_directories": ["E:/Movies", "E:/TV Shows"], "output_directory": "./converted", "use_nvenc": True, "delete_source_on_success": False, "crf_value": 23, "use_two_pass": True}; self.load_config()
@@ -111,7 +137,6 @@ class SubtitleEditorDialog(QDialog):
             self.thread = QThread(); self.worker.moveToThread(self.thread); self.worker.finished.connect(self.on_delete_finished); self.thread.started.connect(self.worker.run); self.thread.start(); self.delete_button.setEnabled(False)
     def on_delete_finished(self, success: bool):
         if success:
-            # Pass the parent widget (MediaFileItemWidget) back to be refreshed
             self.track_modified.emit(self.parent())
             self.accept()
         else:
@@ -126,19 +151,33 @@ class Worker(QObject):
     def run(self):
         try:
             if 'progress_callback' in inspect.signature(self.fn).parameters: self.kwargs['progress_callback'] = lambda p, s: self.progress.emit(p, s)
-            # FIX: Corrected **kwargs to **self.kwargs
             result = self.fn(*self.args, **self.kwargs); self.finished.emit(result)
         except Exception as e: import traceback; self.error.emit((type(e), e, traceback.format_exc()))
 
 class MediaFileItemWidget(QFrame):
     def __init__(self, media_file: MediaFile, dashboard_ref: 'Dashboard'):
-        super().__init__(); self.media_file = media_file; self.dashboard_ref = dashboard_ref; self.setObjectName("MediaFileItemWidget")
-        main_layout = QVBoxLayout(self); main_layout.setContentsMargins(5, 5, 5, 5)
-        header_layout = QHBoxLayout(); self.filename_label = QLabel(); self.status_label = QLabel()
-        header_layout.addWidget(self.filename_label); header_layout.addStretch(); header_layout.addWidget(self.status_label)
+        super().__init__()
+        self.media_file = media_file
+        self.dashboard_ref = dashboard_ref
+        self.setObjectName("MediaFileItemWidget")
+
+        # FIX: Initialize soft_copy_checkboxes in the constructor
+        self.soft_copy_checkboxes: list[QCheckBox] = []
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        header_layout = QHBoxLayout()
+        self.filename_label = QLabel()
+        self.status_label = QLabel()
+        header_layout.addWidget(self.filename_label)
+        header_layout.addStretch()
+        header_layout.addWidget(self.status_label)
         main_layout.addLayout(header_layout)
-        self.stack = QStackedWidget(); main_layout.addWidget(self.stack)
-        self._create_selection_view(); self._create_summary_view(); self._create_metadata_editor_view()
+        self.stack = QStackedWidget()
+        main_layout.addWidget(self.stack)
+        self._create_selection_view()
+        self._create_summary_view()
+        self._create_metadata_editor_view()
         self.refresh_state()
 
     def _create_selection_view(self):
@@ -151,20 +190,22 @@ class MediaFileItemWidget(QFrame):
         self.metadata_video_label = QLabel("Video: N/A")
         self.metadata_audio_label = QLabel("Audio: N/A")
         self.metadata_size_label = QLabel("Size: 0.00 GB")
+        self.remux_checkbox = QCheckBox("Use Fast Remux (Copy)")
         info_layout.addWidget(self.metadata_video_label)
         info_layout.addWidget(self.metadata_audio_label)
         info_layout.addWidget(self.metadata_size_label)
+        info_layout.addSpacing(10)
+        info_layout.addWidget(self.remux_checkbox)
         info_layout.addStretch()
         info_group.setLayout(info_layout)
-        info_group.setFixedWidth(250)
 
-        # Panel 2: Subtitle Tools
-        tools_group = QGroupBox("Subtitle Tools")
+        # Panel 2: File & Subtitle Tools
+        tools_group = QGroupBox("Tools")
         tools_layout = QVBoxLayout()
-        self.preview_sub_btn = QPushButton("🔍 Preview Snippet")
-        self.edit_sub_btn = QPushButton("✂️ Edit/Remove Tracks")
-        self.preview_sub_btn.clicked.connect(self.open_subtitle_preview)
-        self.edit_sub_btn.clicked.connect(self.open_subtitle_editor)
+        self.rename_btn = QPushButton("✏️ Rename File...")
+        self.preview_sub_btn = QPushButton("🔍 Preview Snippet...")
+        self.edit_sub_btn = QPushButton("✂️ Edit/Remove Tracks...")
+        tools_layout.addWidget(self.rename_btn)
         tools_layout.addWidget(self.preview_sub_btn)
         tools_layout.addWidget(self.edit_sub_btn)
         tools_layout.addStretch()
@@ -184,12 +225,39 @@ class MediaFileItemWidget(QFrame):
         selection_layout.addLayout(self.soft_copy_layout)
         selection_layout.addStretch()
         selection_group.setLayout(selection_layout)
+        
+        # Panel 4: Conversion Profile
+        profile_group = QGroupBox("📊 Conversion Profile")
+        profile_layout = QVBoxLayout()
+        self.profile_video_label = QLabel("Video: N/A")
+        self.profile_audio_label = QLabel("Audio: N/A")
+        self.profile_burn_label = QLabel("Burn-in: None")
+        self.profile_copy_label = QLabel("Copy Subs: None")
+        profile_layout.addWidget(self.profile_video_label)
+        profile_layout.addWidget(self.profile_audio_label)
+        profile_layout.addWidget(self.profile_burn_label)
+        profile_layout.addWidget(self.profile_copy_label)
+        profile_layout.addStretch()
+        profile_group.setLayout(profile_layout)
 
         controls_layout.addWidget(info_group)
         controls_layout.addWidget(tools_group)
-        controls_layout.addWidget(selection_group)
-        controls_layout.addStretch() # Pushes all panels to the left
+        controls_layout.addWidget(selection_group, 1)
+        controls_layout.addWidget(profile_group, 1)
+
         self.stack.addWidget(widget)
+
+        self.burn_combo.currentIndexChanged.connect(self.update_conversion_profile_summary)
+        self.remux_checkbox.stateChanged.connect(self.update_conversion_profile_summary)
+        self.rename_btn.clicked.connect(self.open_rename_dialog)
+        self.preview_sub_btn.clicked.connect(self.open_subtitle_preview)
+        self.edit_sub_btn.clicked.connect(self.open_subtitle_editor)
+
+    def open_rename_dialog(self):
+        dialog = RenameDialog(self.media_file.output_filename, getattr(self.media_file, 'title', self.media_file.source_path.stem), self)
+        if names := dialog.get_names():
+            self.media_file.output_filename, self.media_file.title = names
+            self.refresh_state()
 
     def open_subtitle_preview(self):
         dialog = SubtitlePreviewDialog(self.media_file, self)
@@ -216,6 +284,9 @@ class MediaFileItemWidget(QFrame):
         self.preview_display.setReadOnly(True)
         self.preview_display.setMinimumHeight(150)
         preview_layout.addWidget(self.preview_display)
+        self.back_to_controls_btn = QPushButton("Back to Controls")
+        self.back_to_controls_btn.clicked.connect(lambda: self.stack.setCurrentIndex(0))
+        preview_layout.addWidget(self.back_to_controls_btn, 0, Qt.AlignmentFlag.AlignRight)
         preview_group.setLayout(preview_layout)
         main_editor_layout.addWidget(preview_group)
         self.stack.addWidget(widget)
@@ -229,7 +300,10 @@ class MediaFileItemWidget(QFrame):
             self.stack.setCurrentIndex(2)
 
     def refresh_state(self):
-        new_title = getattr(self.media_file, 'title', self.media_file.filename); self.filename_label.setText(f"<b>{new_title}</b>"); self.status_label.setText(f"Status: {self.media_file.status}")
+        new_title = getattr(self.media_file, 'title', self.media_file.filename)
+        self.filename_label.setText(f"<b>{new_title}</b> → <i>{self.media_file.output_filename}</i>")
+        self.status_label.setText(f"Status: {self.media_file.status}")
+        
         if self.media_file.status in ["Converted", "Transferred", "Skipped (Exists)", "Converted (Basic)"]:
             self.orig_size_label.setText(f"Original: {self.media_file.original_size_gb:.2f} GB"); self.new_size_label.setText(f"Converted: {self.media_file.converted_size_gb:.2f} GB")
             self.size_change_label.setText(f"Change: {self.media_file.size_change_percent:+.2f}%"); self.audio_details_label.setText(f"Audio: {getattr(self.media_file, 'audio_conversion_details', 'N/A')}")
@@ -241,24 +315,57 @@ class MediaFileItemWidget(QFrame):
             self.metadata_audio_label.setText(f"Audio: {self.media_file.audio_codec}, {self.media_file.audio_channels}ch")
             self.metadata_size_label.setText(f"Size: {self.media_file.original_size_gb:.2f} GB")
             self.populate_selection_controls()
+            self.update_conversion_profile_summary()
             self.stack.setCurrentIndex(0)
 
     def populate_selection_controls(self):
+        self.burn_combo.blockSignals(True)
         self.burn_combo.clear(); self.burn_combo.addItem("None", None)
         for track in self.media_file.subtitle_tracks:
             self.burn_combo.addItem(track.get_display_name(), track)
             if self.media_file.burned_subtitle and self.media_file.burned_subtitle.index == track.index: self.burn_combo.setCurrentIndex(self.burn_combo.count() - 1)
+        self.burn_combo.blockSignals(False)
+        
         while self.soft_copy_layout.count() > 1:
             child = self.soft_copy_layout.takeAt(1)
             if child.widget(): child.widget().deleteLater()
-        self.soft_copy_checkboxes: list[QCheckBox] = []
+        
+        self.soft_copy_checkboxes = []
+        
         for track in self.media_file.subtitle_tracks:
             if track.is_text_based:
                 cb = QCheckBox(track.get_display_name()); cb.setProperty("track", track);
+                cb.stateChanged.connect(self.update_conversion_profile_summary)
                 self.soft_copy_checkboxes.append(cb); self.soft_copy_layout.addWidget(cb)
 
+    def update_conversion_profile_summary(self):
+        settings = self.dashboard_ref.get_current_settings()
+        video_action = "Copy (Remux)"
+        if self.remux_checkbox.isChecked():
+            video_action = "Copy (Fast Remux)"
+        elif self.burn_combo.currentData() is not None:
+             video_action = f"Re-encode to {settings.video_codec.upper()}"
+        self.profile_video_label.setText(f"Video: {video_action}")
+
+        compatible_audio = ['aac', 'ac3', 'eac3']
+        if self.remux_checkbox.isChecked() or (self.media_file.audio_codec and self.media_file.audio_codec.lower() in compatible_audio):
+             audio_action = f"Copy existing {self.media_file.audio_codec.upper()}"
+        else:
+            audio_action = f"Re-encode to {settings.audio_codec.upper()}"
+        self.profile_audio_label.setText(f"Audio: {audio_action}")
+
+        burned_track = self.burn_combo.currentData()
+        self.profile_burn_label.setText(f"Burn-in: {burned_track.get_display_name() if burned_track else 'None'}")
+        
+        copied_subs = [cb.text() for cb in self.soft_copy_checkboxes if cb.isChecked()]
+        self.profile_copy_label.setText(f"Copy Subs: {len(copied_subs)} track(s)")
+
     def update_media_file_from_ui(self):
-        self.media_file.use_basic_conversion = (self.media_file.classify() == 'remux')
+        if self.remux_checkbox.isChecked():
+            self.media_file.use_basic_conversion = True
+        else:
+            self.media_file.use_basic_conversion = (self.media_file.classify() == 'remux')
+
         selected_burn_track = self.burn_combo.currentData(); self.media_file.burned_subtitle = selected_burn_track;
         for track in self.media_file.subtitle_tracks: track.action = "ignore"
         if selected_burn_track: selected_burn_track.action = "burn"
@@ -269,7 +376,7 @@ class MediaFileItemWidget(QFrame):
 
 class Dashboard(QWidget):
     def __init__(self):
-        super().__init__(); self.setWindowTitle("Media Conversion Dashboard"); self.setGeometry(100, 100, 1200, 800)
+        super().__init__(); self.setWindowTitle("Media Conversion Dashboard"); self.setGeometry(100, 100, 1400, 800)
         self.media_files_data: List[MediaFile] = []; self.thread = None; self.worker = None
         self.config_handler = ConfigHandler(); self.layout = QVBoxLayout(self)
         top_controls = QHBoxLayout(); self.scan_config_button = QPushButton("Scan Configured", clicked=self.scan_configured_folders)
@@ -331,12 +438,12 @@ class Dashboard(QWidget):
             self.file_list.addItem(list_item); self.file_list.setItemWidget(list_item, item_widget)
     def get_selected_media_files(self) -> List[MediaFile]:
         selected_items = self.file_list.selectedItems()
-        if not selected_items: # If nothing is selected, return all items
+        if not selected_items:
              return [self.file_list.itemWidget(self.file_list.item(i)).media_file for i in range(self.file_list.count())]
         return [self.file_list.itemWidget(item).media_file for item in selected_items]
 
     def _run_combined_conversion(self, files: List[MediaFile], settings: ConversionSettings, progress_callback: Callable):
-        for f in files: f.use_basic_conversion = (f.classify() == 'remux')
+        for f in files: self.file_list.itemWidget(self.find_list_item(f)).update_media_file_from_ui()
         basic_files = [f for f in files if f.use_basic_conversion]
         advanced_files = [f for f in files if not f.use_basic_conversion]
         if basic_files:
@@ -347,7 +454,6 @@ class Dashboard(QWidget):
     def start_conversion(self):
         files = self.get_selected_media_files();
         if not files: self.show_message("No Files", "No files to convert."); return
-        for f in files: self.file_list.itemWidget(self.find_list_item(f)).update_media_file_from_ui()
         settings = self.get_current_settings()
         try: settings.output_directory.mkdir(parents=True, exist_ok=True)
         except Exception as e: self.show_message("Error", f"Could not create output directory.\n{e}"); return
@@ -391,6 +497,7 @@ class Dashboard(QWidget):
                 widget.refresh_state()
 
     def refresh_list_item_by_widget(self, widget: MediaFileItemWidget):
+        if not widget: return
         for i in range(self.file_list.count()):
             item = self.file_list.item(i)
             if self.file_list.itemWidget(item) == widget:
@@ -403,6 +510,8 @@ class Dashboard(QWidget):
             new_media_file_state = subtitlesmkv.scan_file(widget.media_file.source_path)
             for i, mf in enumerate(self.media_files_data):
                 if mf.source_path == new_media_file_state.source_path:
+                    new_media_file_state.output_filename = mf.output_filename
+                    new_media_file_state.title = getattr(mf, 'title', None)
                     self.media_files_data[i] = new_media_file_state
                     break
             item.setData(Qt.ItemDataRole.UserRole, new_media_file_state)
