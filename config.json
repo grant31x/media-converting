@@ -7,5 +7,5 @@
     "use_nvenc": true,
     "delete_source_on_success": false,
     "crf_value": 20,
-    "use_two_pass": true
+    "use_two_pass": false
 }

@@ -1,5 +1,5 @@
 # dashboard.py
-# Version: 2.8
+# Version: 2.9
 # This is the main PyQt6 GUI for the media conversion tool. It orchestrates the scanning,
 # user selection, conversion, and file transfer processes by calling the other backend modules.
 
@@ -72,7 +72,16 @@ class SettingsWindow(QDialog):
     def __init__(self, config_handler: ConfigHandler, parent=None):
         super().__init__(parent); self.config_handler = config_handler; self.setWindowTitle("Settings"); self.setMinimumWidth(500); self.layout = QVBoxLayout(self)
         conv_group = QGroupBox("Conversion Settings"); conv_layout = QVBoxLayout(); self.nvenc_checkbox = QCheckBox("Use NVIDIA NVENC Hardware Acceleration"); self.two_pass_checkbox = QCheckBox("Use Smart 2-Pass Encoding (for quality and size control)"); self.delete_source_checkbox = QCheckBox("Delete original file after successful conversion")
-        crf_layout = QHBoxLayout(); crf_layout.addWidget(QLabel("Video Quality (CRF, lower is better):")); self.crf_spinbox = QSpinBox(); self.crf_spinbox.setRange(0, 51); crf_layout.addWidget(self.crf_spinbox)
+        
+        # FIX: Make the quality label generic and add a helpful tooltip
+        crf_layout = QHBoxLayout()
+        quality_label = QLabel("Video Quality (lower = higher quality):")
+        quality_label.setToolTip("Controls visual quality. Lower = better quality, higher = smaller file.\n- Uses CRF for software encoding (e.g., libx264)\n- Uses CQ for hardware encoding (e.g., NVENC)")
+        crf_layout.addWidget(quality_label)
+        self.crf_spinbox = QSpinBox()
+        self.crf_spinbox.setRange(0, 51)
+        crf_layout.addWidget(self.crf_spinbox)
+        
         conv_layout.addWidget(self.nvenc_checkbox); conv_layout.addWidget(self.two_pass_checkbox); conv_layout.addWidget(self.delete_source_checkbox); conv_layout.addLayout(crf_layout); conv_group.setLayout(conv_layout); self.layout.addWidget(conv_group)
         self.layout.addWidget(QLabel("Default Output Directory:")); output_dir_layout = QHBoxLayout(); self.output_dir_edit = QLineEdit(); self.browse_output_btn = QPushButton("Browse..."); output_dir_layout.addWidget(self.output_dir_edit); output_dir_layout.addWidget(self.browse_output_btn); self.layout.addLayout(output_dir_layout)
         self.dir_list_widget = QListWidget(); self.layout.addWidget(QLabel("Scan Directories:")); self.layout.addWidget(self.dir_list_widget); btn_layout = QHBoxLayout(); self.add_btn = QPushButton("Add Scan Directory..."); self.remove_btn = QPushButton("Remove Selected"); btn_layout.addWidget(self.add_btn); btn_layout.addWidget(self.remove_btn); self.layout.addLayout(btn_layout)
@@ -191,7 +200,6 @@ class MediaFileItemWidget(QFrame):
         info_layout.addWidget(self.metadata_size_label)
         info_layout.addSpacing(10)
         info_layout.addWidget(self.remux_checkbox)
-        info_layout.addStretch()
         info_group.setLayout(info_layout)
         tools_group = QGroupBox("Tools")
         tools_layout = QVBoxLayout()
@@ -201,7 +209,6 @@ class MediaFileItemWidget(QFrame):
         tools_layout.addWidget(self.rename_btn)
         tools_layout.addWidget(self.preview_sub_btn)
         tools_layout.addWidget(self.edit_sub_btn)
-        tools_layout.addStretch()
         tools_group.setLayout(tools_layout)
         selection_group = QGroupBox("Subtitle Selection")
         selection_layout = QVBoxLayout()
@@ -214,7 +221,6 @@ class MediaFileItemWidget(QFrame):
         self.soft_copy_layout.addWidget(QLabel("<b>Copy Subtitles (Softsub):</b>"))
         selection_layout.addLayout(burn_in_layout)
         selection_layout.addLayout(self.soft_copy_layout)
-        selection_layout.addStretch()
         selection_group.setLayout(selection_layout)
         profile_group = QGroupBox("📊 Conversion Profile")
         profile_layout = QVBoxLayout()
@@ -226,7 +232,6 @@ class MediaFileItemWidget(QFrame):
         profile_layout.addWidget(self.profile_audio_label)
         profile_layout.addWidget(self.profile_burn_label)
         profile_layout.addWidget(self.profile_copy_label)
-        profile_layout.addStretch()
         profile_group.setLayout(profile_layout)
         controls_layout.addWidget(info_group)
         controls_layout.addWidget(tools_group)
