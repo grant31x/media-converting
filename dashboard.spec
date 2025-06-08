@@ -5,7 +5,7 @@ a = Analysis(
     ['dashboard.py'],
     pathex=[],
     binaries=[],
-    datas=[('styles.css', '.')],
+    datas=[('styles.css', '.'), ('config.json', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

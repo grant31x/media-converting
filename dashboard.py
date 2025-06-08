@@ -1,6 +1,7 @@
 # dashboard.py
-# Version: 3.1
-# This is the main PyQt6 GUI for the media conversion tool, structured for PyInstaller deployment.
+# Version: 3.3
+# This is the main PyQt6 GUI, refactored for a clean, single-process PyInstaller build
+# with proper resource bundling and configuration management.
 
 import sys
 import os
@@ -26,16 +27,37 @@ import robocopy
 import basic_convert
 import mkv_modifier
 
-# --- Helper function for PyInstaller ---
+# --- Helper functions for PyInstaller and Configuration ---
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
     try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.abspath(".")
-
     return os.path.join(base_path, relative_path)
+
+def get_writable_config_path():
+    """Gets the path for the runtime config file in the user's AppData directory."""
+    base = Path(os.getenv("APPDATA", Path.home()))
+    return base / "MediaConverter" / "config.json"
+
+def ensure_writable_config():
+    """Ensures the runtime config file and its directory exist.
+    If it doesn't exist, it copies the default config from the bundled resources.
+    """
+    config_path = get_writable_config_path()
+    if not config_path.exists():
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(resource_path("config.json"), "r", encoding="utf-8") as default_f:
+                default_data = json.load(default_f)
+            with open(config_path, "w", encoding="utf-8") as writable_f:
+                json.dump(default_data, writable_f, indent=4)
+        except Exception as e:
+            print(f"Could not create initial config from bundled default: {e}. Writing empty config.")
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump({}, f)
+    return config_path
 
 # --- Dialog for Renaming Files ---
 class RenameDialog(QDialog):
@@ -43,15 +65,12 @@ class RenameDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Rename File")
         self.layout = QVBoxLayout(self)
-
         self.layout.addWidget(QLabel("Output Filename:"))
         self.filename_edit = QLineEdit(current_filename)
         self.layout.addWidget(self.filename_edit)
-
         self.layout.addWidget(QLabel("Metadata Title (Optional):"))
         self.title_edit = QLineEdit(current_title)
         self.layout.addWidget(self.title_edit)
-
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
@@ -64,21 +83,36 @@ class RenameDialog(QDialog):
 
 # --- Main Application Classes ---
 class ConfigHandler:
-    def __init__(self, config_path: str = "config.json"):
-        self.config_path = Path(config_path); self.config: Dict[str, Any] = {}; self.default_config = {"scan_directories": ["E:/Movies", "E:/TV Shows"], "output_directory": "./converted", "use_nvenc": True, "delete_source_on_success": False, "crf_value": 23, "use_two_pass": True}; self.load_config()
+    def __init__(self):
+        self.config_path = ensure_writable_config()
+        self.config: Dict[str, Any] = {}
+        self.load_config()
+
     def load_config(self):
-        if not self.config_path.exists(): self.config = self.default_config
-        else:
+        try:
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                self.config = json.load(f)
+        except (json.JSONDecodeError, IOError, FileNotFoundError):
+            print(f"Could not load runtime config from {self.config_path}.")
             try:
-                with open(self.config_path, "r", encoding="utf-8") as f: self.config = self.default_config | json.load(f)
-            except (json.JSONDecodeError, IOError): self.config = self.default_config
-        self.save_config()
+                with open(resource_path("config.json"), "r", encoding="utf-8") as f:
+                    self.config = json.load(f)
+            except Exception as e:
+                print(f"FATAL: Could not load any config. Error: {e}")
+                self.config = {}
+
     def save_config(self):
         try:
-            with open(self.config_path, "w", encoding="utf-8") as f: json.dump(self.config, f, indent=4)
-        except IOError as e: print(f"Error saving config file: {e}")
-    def get_setting(self, key: str, default: Any = None) -> Any: return self.config.get(key, default)
-    def set_setting(self, key: str, value: Any): self.config[key] = value
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                json.dump(self.config, f, indent=4)
+        except IOError as e:
+            print(f"Error saving config file to {self.config_path}: {e}")
+
+    def get_setting(self, key: str, default: Any = None) -> Any:
+        return self.config.get(key, default)
+
+    def set_setting(self, key: str, value: Any):
+        self.config[key] = value
 
 class SettingsWindow(QDialog):
     def __init__(self, config_handler: ConfigHandler, parent=None):
@@ -142,7 +176,7 @@ class SettingsWindow(QDialog):
         self.two_pass_checkbox.setChecked(self.config_handler.get_setting("use_two_pass", True))
         self.delete_source_checkbox.setChecked(self.config_handler.get_setting("delete_source_on_success", False))
         self.quality_spinbox.setValue(self.config_handler.get_setting("crf_value", 23))
-        self.output_dir_edit.setText(self.config_handler.get_setting("output_directory"))
+        self.output_dir_edit.setText(self.config_handler.get_setting("output_directory", str(Path.home() / "Videos" / "Converted")))
         self.dir_list_widget.clear()
         self.dir_list_widget.addItems(self.config_handler.get_setting("scan_directories", []))
 
@@ -440,9 +474,7 @@ class Dashboard(QWidget):
         self.thread = None
         self.worker = None
         self.config_handler = ConfigHandler()
-        
         self.layout = QVBoxLayout(self)
-        
         top_controls = QHBoxLayout()
         self.scan_config_button = QPushButton("Scan Configured", clicked=self.scan_configured_folders)
         self.scan_custom_button = QPushButton("Scan Custom...", clicked=self.scan_custom_folder)
@@ -452,27 +484,21 @@ class Dashboard(QWidget):
         top_controls.addStretch()
         top_controls.addWidget(self.settings_button)
         self.layout.addLayout(top_controls)
-        
         self.file_list = QListWidget()
         self.file_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.layout.addWidget(self.file_list, 1)
-        
         self.bottom_button_stack = QStackedWidget()
         self._create_normal_buttons()
         self.layout.addWidget(self.bottom_button_stack)
-        
         self.status_bar = QStatusBar()
         self.layout.addWidget(self.status_bar)
         self.status_bar.showMessage("Ready.")
-        
-        # Apply stylesheet
         try:
             with open(resource_path("styles.css"), "r") as f:
                 self.setStyleSheet(f.read())
         except Exception as e:
             print(f"Could not load stylesheet: {e}")
             QApplication.instance().setStyle("Fusion")
-
 
     def _create_normal_buttons(self):
         normal_widget = QWidget(); bottom_controls = QHBoxLayout(normal_widget)
@@ -616,7 +642,6 @@ class Dashboard(QWidget):
         msg_box = QMessageBox(self); msg_box.setWindowTitle(title); msg_box.setText(message); msg_box.exec()
 
 if __name__ == "__main__":
-    # This ensures the app doesn't re-launch when built with PyInstaller
     from multiprocessing import freeze_support
     freeze_support()
     

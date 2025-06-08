@@ -12,20 +12,33 @@ from typing import List, Tuple, Callable, Optional
 from models import MediaFile, SubtitleTrack, ConversionSettings
 from subtitlesmkv import verify_subtitle_language_is_english
 
+# --- Platform-specific subprocess creation flags ---
+if sys.platform == "win32":
+    CREATE_NO_WINDOW = subprocess.CREATE_NO_WINDOW
+else:
+    CREATE_NO_WINDOW = 0 # This flag is not used on non-Windows platforms
+
 def _get_media_duration(file_path: Path) -> float:
-    # ... (function remains the same)
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(file_path)]
-    result = subprocess.run(cmd, capture_output=True, text=True, check=True); return float(result.stdout.strip())
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True, creationflags=CREATE_NO_WINDOW)
+    return float(result.stdout.strip())
 
 def _time_to_seconds(time_str: str) -> float:
-    # ... (function remains the same)
     try:
         parts = time_str.split(':'); return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
     except (ValueError, IndexError): return 0.0
 
 def _run_ffmpeg_with_progress(command: List[str], duration: float, progress_callback: Callable, stop_check: Callable[[], bool]):
-    # ... (function remains the same)
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', bufsize=1)
+    process = subprocess.Popen(
+        command, 
+        stdout=subprocess.PIPE, 
+        stderr=subprocess.STDOUT, 
+        text=True, 
+        encoding='utf-8', 
+        errors='replace', 
+        bufsize=1,
+        creationflags=CREATE_NO_WINDOW
+    )
     full_output = [];
     for line in iter(process.stdout.readline, ""):
         full_output.append(line)
@@ -37,7 +50,6 @@ def _run_ffmpeg_with_progress(command: List[str], duration: float, progress_call
     if process.returncode != 0: raise subprocess.CalledProcessError(returncode=process.returncode, cmd=command, output=''.join(full_output))
 
 def convert_batch(media_files: List[MediaFile], settings: ConversionSettings, progress_callback: Optional[Callable] = None, stop_check: Callable[[], bool] = lambda: False):
-    # ... (function remains the same)
     for i, media in enumerate(media_files):
         if stop_check(): break
         if _should_skip_conversion(media): continue
@@ -47,14 +59,12 @@ def convert_batch(media_files: List[MediaFile], settings: ConversionSettings, pr
     return media_files
 
 def _should_skip_conversion(media: MediaFile) -> bool:
-    # ... (function remains the same)
     if not media.needs_conversion: return True
     final_output_path = media.source_path.with_suffix('.mp4')
     if final_output_path.exists(): media.status = "Skipped (Exists)"; return True
     return False
 
 def convert_media_file(media: MediaFile, settings: ConversionSettings, progress_callback: Callable, stop_check: Callable):
-    # ... (function remains the same)
     media.status = "Preparing"; final_output_path = media.source_path.with_suffix(".mp4"); temp_output_path = media.source_path.with_suffix(".temp.mp4"); media.destination_path = final_output_path
     if media.source_path.exists(): media.original_size_gb = media.source_path.stat().st_size / (1024**3)
     if media.burned_subtitle and not verify_subtitle_language_is_english(media.source_path, media.burned_subtitle.index): media.burned_subtitle = None
@@ -95,7 +105,6 @@ def _build_ffmpeg_command(media: MediaFile, settings: ConversionSettings, output
     if pass_num == 1:
         command.extend(["-an", "-f", "null", "NUL" if sys.platform == "win32" else "/dev/null"])
     else:
-        # --- NEW: Smart Audio Logic ---
         compatible_codecs = ['aac', 'ac3', 'eac3']
         if media.audio_codec and media.audio_codec.lower() in compatible_codecs and media.audio_channels >= 6:
             command.extend(["-c:a", "copy"])

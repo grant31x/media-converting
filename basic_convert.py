@@ -3,20 +3,23 @@
 
 import subprocess
 import shlex
+import sys
 from pathlib import Path
 from typing import List
 import concurrent.futures
 
 from models import MediaFile, ConversionSettings
 
+# --- Platform-specific subprocess creation flags ---
+if sys.platform == "win32":
+    CREATE_NO_WINDOW = subprocess.CREATE_NO_WINDOW
+else:
+    CREATE_NO_WINDOW = 0
+
 def run_basic_conversion(media: MediaFile, settings: ConversionSettings):
     """
     Performs a basic remux of an MKV file to MP4, copying video/audio and discarding subtitles.
     This is very fast as it does not re-encode video or audio.
-
-    Args:
-        media: The MediaFile object to process.
-        settings: The application's conversion settings.
     """
     media.status = "Remuxing"
     
@@ -46,7 +49,7 @@ def run_basic_conversion(media: MediaFile, settings: ConversionSettings):
             media.status = "Dry Run (Basic)"
             return
 
-        subprocess.run(command, check=True, capture_output=True, text=True, encoding='utf-8')
+        subprocess.run(command, check=True, capture_output=True, text=True, encoding='utf-8', creationflags=CREATE_NO_WINDOW)
         
         temp_output_path.rename(final_output_path)
         
@@ -73,10 +76,6 @@ def run_basic_conversion(media: MediaFile, settings: ConversionSettings):
 def run_batch_basic_conversion(media_files: List[MediaFile], settings: ConversionSettings):
     """
     Performs basic remuxing for a batch of files concurrently.
-
-    Args:
-        media_files: A list of MediaFile objects to process.
-        settings: The application's conversion settings.
     """
     print(f"Starting basic conversion for {len(media_files)} files using up to 3 threads.")
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
@@ -87,5 +86,4 @@ def run_batch_basic_conversion(media_files: List[MediaFile], settings: Conversio
                 future.result()
             except Exception as exc:
                 print(f'A basic conversion task generated an exception: {exc}')
-
     return media_files
