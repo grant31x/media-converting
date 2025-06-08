@@ -1,12 +1,12 @@
 # dashboard.py
-# Version: 2.2
+# Version: 2.3
 # This is the main PyQt6 GUI for the media conversion tool. It orchestrates the scanning,
 # user selection, conversion, and file transfer processes by calling the other backend modules.
 
 import sys
 import json
 import re
-import inspect 
+import inspect
 from pathlib import Path
 from typing import List, Callable, Tuple, Dict, Any
 
@@ -23,7 +23,7 @@ import subtitlesmkv
 import convert
 import robocopy
 import basic_convert
-import mkv_modifier 
+import mkv_modifier
 
 class ConfigHandler:
     def __init__(self, config_path: str = "config.json"):
@@ -78,18 +78,18 @@ class SubtitlePreviewDialog(QDialog):
     def run_preview(self):
         selected_track = self.track_combo.currentData();
         if not selected_track: return
-        self.selected_track = selected_track; self.snippet_display.setText(f"Extracting snippet for track {self.selected_track.index}..."); 
+        self.selected_track = selected_track; self.snippet_display.setText(f"Extracting snippet for track {self.selected_track.index}...");
         self.worker = Worker(subtitlesmkv.get_subtitle_details, self.media_file.source_path, self.selected_track.index)
         self.thread = QThread(); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.finished.connect(self.on_preview_finished); self.thread.start()
     def on_preview_finished(self, result: Tuple[str, str]):
         snippet, detected_lang = result; self.snippet_display.setText(snippet); self.detected_lang_label.setText(f"Detected Language: <b>{detected_lang.upper()}</b>")
-        metadata_lang_code = self.selected_track.language[:2] 
+        metadata_lang_code = self.selected_track.language[:2]
         if metadata_lang_code and detected_lang != "unknown" and metadata_lang_code != detected_lang: self.warning_label.setText("⚠️ Language Mismatch!")
         else: self.warning_label.setText("")
         self.thread.quit()
 
 class SubtitleEditorDialog(QDialog):
-    track_modified = pyqtSignal() 
+    track_modified = pyqtSignal()
     def __init__(self, media_file: MediaFile, parent=None):
         super().__init__(parent); self.media_file = media_file; self.setWindowTitle(f"Edit/Remove Subtitles - {media_file.filename}"); self.setMinimumSize(600, 400); self.layout = QVBoxLayout(self)
         self.track_list = QListWidget(); self.track_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection); self.layout.addWidget(self.track_list)
@@ -115,7 +115,7 @@ class SubtitleEditorDialog(QDialog):
         self.thread.quit()
 
 class Worker(QObject):
-    finished = pyqtSignal(object); error = pyqtSignal(tuple); progress = pyqtSignal(int, str) 
+    finished = pyqtSignal(object); error = pyqtSignal(tuple); progress = pyqtSignal(int, str)
     def __init__(self, fn: Callable, *args, **kwargs):
         super().__init__(); self.fn, self.args, self.kwargs = fn, args, kwargs
     def run(self):
@@ -126,7 +126,7 @@ class Worker(QObject):
 
 class MediaFileItemWidget(QFrame):
     def __init__(self, media_file: MediaFile, dashboard_ref: 'Dashboard'):
-        super().__init__(); self.media_file = media_file; self.dashboard_ref = dashboard_ref; self.setObjectName("MediaFileItemWidget") 
+        super().__init__(); self.media_file = media_file; self.dashboard_ref = dashboard_ref; self.setObjectName("MediaFileItemWidget")
         main_layout = QVBoxLayout(self); main_layout.setContentsMargins(5, 5, 5, 5)
         header_layout = QHBoxLayout(); self.filename_label = QLabel(); self.status_label = QLabel()
         header_layout.addWidget(self.filename_label); header_layout.addStretch(); header_layout.addWidget(self.status_label)
@@ -134,24 +134,42 @@ class MediaFileItemWidget(QFrame):
         self.stack = QStackedWidget(); main_layout.addWidget(self.stack)
         self._create_selection_view(); self._create_summary_view(); self._create_metadata_editor_view()
         self.refresh_state()
-        
+
     def _create_selection_view(self):
         widget = QWidget()
         controls_layout = QHBoxLayout(widget)
-        
-        # FIX: Remove the QGroupBox for a more compact layout
+
+        # --- Section 1: Metadata Display ---
+        metadata_layout = QVBoxLayout()
+        metadata_layout.addWidget(QLabel("<b>Source Info:</b>"))
+        self.metadata_video_label = QLabel("Video: N/A")
+        self.metadata_audio_label = QLabel("Audio: N/A")
+        self.metadata_size_label = QLabel("Size: N/A")
+        metadata_layout.addWidget(self.metadata_video_label)
+        metadata_layout.addWidget(self.metadata_audio_label)
+        metadata_layout.addWidget(self.metadata_size_label)
+        metadata_layout.addStretch()
+
+        # --- Section 2: Burn-in Subtitle ---
         burn_in_layout = QVBoxLayout()
         burn_in_layout.addWidget(QLabel("<b>Burn-in Subtitle:</b>"))
         self.burn_combo = QComboBox()
         burn_in_layout.addWidget(self.burn_combo)
-        burn_in_layout.addStretch() # Pushes the combo box to the top, keeping the layout tight
-        
-        soft_copy_group = QGroupBox("Copy Subtitles (Softsub)")
-        self.soft_copy_layout = QVBoxLayout()
-        soft_copy_group.setLayout(self.soft_copy_layout)
+        burn_in_layout.addStretch()
 
-        controls_layout.addLayout(burn_in_layout, 1) # Give it a stretch factor of 1
-        controls_layout.addWidget(soft_copy_group, 2) # Give the copy box more horizontal space
+        # --- Section 3: Copy Subtitles (Softsub) - with reduced padding ---
+        soft_copy_container = QWidget()
+        soft_copy_main_layout = QVBoxLayout(soft_copy_container)
+        soft_copy_main_layout.setContentsMargins(0, 0, 0, 0)
+        soft_copy_main_layout.setSpacing(2) # Reduce spacing
+        soft_copy_main_layout.addWidget(QLabel("<b>Copy Subtitles (Softsub):</b>"))
+        self.soft_copy_layout = QVBoxLayout() # This layout will hold the checkboxes
+        soft_copy_main_layout.addLayout(self.soft_copy_layout)
+        soft_copy_main_layout.addStretch()
+
+        controls_layout.addLayout(metadata_layout, 2)
+        controls_layout.addLayout(burn_in_layout, 2)
+        controls_layout.addWidget(soft_copy_container, 3)
         self.stack.addWidget(widget)
 
     def _create_summary_view(self):
@@ -162,7 +180,7 @@ class MediaFileItemWidget(QFrame):
         self.stack.addWidget(widget)
     def _create_metadata_editor_view(self):
         widget = QWidget(); main_editor_layout = QVBoxLayout(widget)
-        metadata_group = QGroupBox("Metadata"); editor_layout = QHBoxLayout(); 
+        metadata_group = QGroupBox("Metadata"); editor_layout = QHBoxLayout();
         self.title_edit, self.season_edit, self.episode_edit = QLineEdit(), QSpinBox(), QSpinBox()
         self.media_type_combo = QComboBox(); self.media_type_combo.addItems(["Movie", "TV Show"])
         editor_layout.addWidget(QLabel("Title:")); editor_layout.addWidget(self.title_edit, 1); editor_layout.addWidget(QLabel("Type:")); editor_layout.addWidget(self.media_type_combo)
@@ -179,8 +197,6 @@ class MediaFileItemWidget(QFrame):
         preview_text = self.media_file.generate_preview(settings); self.preview_display.setText(preview_text)
     def refresh_state(self):
         new_title = getattr(self.media_file, 'title', self.media_file.filename); self.filename_label.setText(f"<b>{new_title}</b>"); self.status_label.setText(f"Status: {self.media_file.status}")
-        # The checkbox has been removed, so this line is no longer needed.
-        # self.basic_conv_checkbox.setChecked(self.media_file.use_basic_conversion) 
         if getattr(self.media_file, 'is_editing_metadata', False):
             self.title_edit.setText(getattr(self.media_file, 'title', self.media_file.source_path.stem)); self.media_type_combo.setCurrentText(getattr(self.media_file, 'media_type', 'Movie'))
             self.season_edit.setValue(getattr(self.media_file, 'season', 0)); self.episode_edit.setValue(getattr(self.media_file, 'episode', 0)); self.stack.setCurrentIndex(2)
@@ -191,7 +207,11 @@ class MediaFileItemWidget(QFrame):
             copied_subs = ", ".join([s.title or f"Track {s.index}" for s in self.media_file.subtitle_tracks if s.action == 'copy']) or "None"
             self.subs_details_label.setText(f"Subs Burned: {burned_sub} | Copied: {copied_subs}"); self.stack.setCurrentIndex(1)
         else:
-            self.populate_selection_controls(); self.stack.setCurrentIndex(0)
+            self.metadata_video_label.setText(f"Video: {self.media_file.video_codec}, {self.media_file.video_width}p")
+            self.metadata_audio_label.setText(f"Audio: {self.media_file.audio_codec}, {self.media_file.audio_channels}ch")
+            self.metadata_size_label.setText(f"Size: {self.media_file.original_size_gb:.2f} GB")
+            self.populate_selection_controls()
+            self.stack.setCurrentIndex(0)
     def populate_selection_controls(self):
         self.burn_combo.clear(); self.burn_combo.addItem("None", None)
         for track in self.media_file.subtitle_tracks:
@@ -239,7 +259,7 @@ class Dashboard(QWidget):
         self.convert_button = QPushButton("Convert Selected", clicked=self.start_conversion)
         self.edit_metadata_button = QPushButton("Edit Metadata", clicked=self.enter_edit_mode)
         self.transfer_button = QPushButton("Transfer Converted", clicked=self.start_transfer)
-        self.cancel_button = QPushButton("Cancel", clicked=self.cancel_task); self.cancel_button.setEnabled(False) 
+        self.cancel_button = QPushButton("Cancel", clicked=self.cancel_task); self.cancel_button.setEnabled(False)
         bottom_controls.addWidget(self.progress_bar, 1); bottom_controls.addWidget(self.convert_button)
         bottom_controls.addWidget(self.edit_metadata_button); bottom_controls.addWidget(self.transfer_button); bottom_controls.addWidget(self.cancel_button)
         self.bottom_button_stack.addWidget(normal_widget)
@@ -301,7 +321,7 @@ class Dashboard(QWidget):
         settings = self.get_current_settings()
         try: settings.output_directory.mkdir(parents=True, exist_ok=True)
         except Exception as e: self.show_message("Error", f"Could not create output directory.\n{e}"); return
-        self.progress_bar.setFormat("%p%") 
+        self.progress_bar.setFormat("%p%")
         self._run_task(self._run_combined_conversion, self.on_action_finished, files=files, settings=settings)
     def get_current_settings(self) -> ConversionSettings:
         return ConversionSettings(
@@ -376,12 +396,12 @@ class Dashboard(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    
+
     try:
-        style_file = Path("styles.qss") 
+        style_file = Path("styles.qss")
         if not style_file.exists():
             style_file = Path("styles.css")
-        
+
         if style_file.exists():
             with open(style_file, "r") as f: app.setStyleSheet(f.read())
         else:
