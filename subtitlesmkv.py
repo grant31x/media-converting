@@ -1,5 +1,5 @@
 # subtitlesmkv.py
-# Version: 2.0
+# Version: 2.1
 # This module scans media files and extracts subtitle track information or snippets.
 
 import subprocess
@@ -46,6 +46,10 @@ def scan_file(file_path: Path) -> MediaFile:
     media = MediaFile(source_path=file_path)
     media.status = "Scanning"
     try:
+        # FIX: Calculate file size immediately on scan
+        if file_path.exists():
+            media.original_size_gb = file_path.stat().st_size / (1024**3)
+
         cmd = [str(MKVMERGE_PATH), "-J", str(file_path)]
         result = subprocess.run(cmd, check=True, capture_output=True, text=True, encoding='utf-8')
         data = json.loads(result.stdout)
