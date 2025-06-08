@@ -1,9 +1,9 @@
 # dashboard.py
-# Version: 3.0
-# This is the main PyQt6 GUI for the media conversion tool. It orchestrates the scanning,
-# user selection, conversion, and file transfer processes by calling the other backend modules.
+# Version: 3.1
+# This is the main PyQt6 GUI for the media conversion tool, structured for PyInstaller deployment.
 
 import sys
+import os
 import json
 import re
 import inspect
@@ -18,12 +18,24 @@ from PyQt6.QtWidgets import (
     QStatusBar, QSpinBox, QTextEdit, QMenu, QProgressBar
 )
 
+# --- Project Modules ---
 from models import MediaFile, SubtitleTrack, ConversionSettings
 import subtitlesmkv
 import convert
 import robocopy
 import basic_convert
 import mkv_modifier
+
+# --- Helper function for PyInstaller ---
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 # --- Dialog for Renaming Files ---
 class RenameDialog(QDialog):
@@ -75,26 +87,17 @@ class SettingsWindow(QDialog):
         self.setWindowTitle("Settings")
         self.setMinimumWidth(550)
         self.layout = QVBoxLayout(self)
-
         conv_group = QGroupBox("Conversion Settings")
         conv_layout = QVBoxLayout()
-
-        # NVENC Checkbox
         self.nvenc_checkbox = QCheckBox("Enable GPU Encoding (NVIDIA NVENC)")
         self.nvenc_checkbox.setToolTip("Faster and efficient—uses your graphics card instead of the CPU.")
         conv_layout.addWidget(self.nvenc_checkbox)
-
-        # 2-Pass Checkbox
         self.two_pass_checkbox = QCheckBox("Enable 2-Pass Mode (slower, better file size)")
         self.two_pass_checkbox.setToolTip("Runs two scans over the file to optimize video quality and compression.")
         conv_layout.addWidget(self.two_pass_checkbox)
-
-        # Delete Source Checkbox
         self.delete_source_checkbox = QCheckBox("Delete Original File After Conversion")
         self.delete_source_checkbox.setToolTip("⚠️ This action is permanent and cannot be undone.")
         conv_layout.addWidget(self.delete_source_checkbox)
-
-        # Quality Level Field
         quality_layout = QHBoxLayout()
         quality_label = QLabel("Target Quality Level (lower = better quality):")
         quality_label.setToolTip(
@@ -107,11 +110,8 @@ class SettingsWindow(QDialog):
         self.quality_spinbox.setRange(0, 51)
         quality_layout.addWidget(self.quality_spinbox)
         conv_layout.addLayout(quality_layout)
-        
         conv_group.setLayout(conv_layout)
         self.layout.addWidget(conv_group)
-
-        # Directory Settings
         self.layout.addWidget(QLabel("Default Output Directory:"))
         output_dir_layout = QHBoxLayout()
         self.output_dir_edit = QLineEdit()
@@ -119,7 +119,6 @@ class SettingsWindow(QDialog):
         output_dir_layout.addWidget(self.output_dir_edit)
         output_dir_layout.addWidget(self.browse_output_btn)
         self.layout.addLayout(output_dir_layout)
-        
         self.dir_list_widget = QListWidget()
         self.layout.addWidget(QLabel("Scan Directories:"))
         self.layout.addWidget(self.dir_list_widget)
@@ -129,18 +128,13 @@ class SettingsWindow(QDialog):
         btn_layout.addWidget(self.add_btn)
         btn_layout.addWidget(self.remove_btn)
         self.layout.addLayout(btn_layout)
-
-        # Save/Cancel Buttons
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         self.layout.addWidget(self.button_box)
-
-        # Connect signals
         self.browse_output_btn.clicked.connect(lambda: self.browse_directory(self.output_dir_edit))
         self.add_btn.clicked.connect(self.add_scan_directory)
         self.remove_btn.clicked.connect(lambda: self.dir_list_widget.takeItem(self.dir_list_widget.currentRow()))
         self.button_box.accepted.connect(self.save_and_accept)
         self.button_box.rejected.connect(self.reject)
-        
         self.load_settings()
 
     def load_settings(self):
@@ -439,17 +433,46 @@ class MediaFileItemWidget(QFrame):
 
 class Dashboard(QWidget):
     def __init__(self):
-        super().__init__(); self.setWindowTitle("Media Conversion Dashboard"); self.setGeometry(100, 100, 1400, 800)
-        self.media_files_data: List[MediaFile] = []; self.thread = None; self.worker = None
-        self.config_handler = ConfigHandler(); self.layout = QVBoxLayout(self)
-        top_controls = QHBoxLayout(); self.scan_config_button = QPushButton("Scan Configured", clicked=self.scan_configured_folders)
-        self.scan_custom_button = QPushButton("Scan Custom...", clicked=self.scan_custom_folder); self.settings_button = QPushButton("Settings", clicked=self.open_settings)
-        top_controls.addWidget(self.scan_config_button); top_controls.addWidget(self.scan_custom_button); top_controls.addStretch(); top_controls.addWidget(self.settings_button); self.layout.addLayout(top_controls)
-        self.file_list = QListWidget(); self.file_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        super().__init__()
+        self.setWindowTitle("Media Conversion Dashboard")
+        self.setGeometry(100, 100, 1400, 800)
+        self.media_files_data: List[MediaFile] = []
+        self.thread = None
+        self.worker = None
+        self.config_handler = ConfigHandler()
+        
+        self.layout = QVBoxLayout(self)
+        
+        top_controls = QHBoxLayout()
+        self.scan_config_button = QPushButton("Scan Configured", clicked=self.scan_configured_folders)
+        self.scan_custom_button = QPushButton("Scan Custom...", clicked=self.scan_custom_folder)
+        self.settings_button = QPushButton("Settings", clicked=self.open_settings)
+        top_controls.addWidget(self.scan_config_button)
+        top_controls.addWidget(self.scan_custom_button)
+        top_controls.addStretch()
+        top_controls.addWidget(self.settings_button)
+        self.layout.addLayout(top_controls)
+        
+        self.file_list = QListWidget()
+        self.file_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.layout.addWidget(self.file_list, 1)
-        self.bottom_button_stack = QStackedWidget(); self._create_normal_buttons()
+        
+        self.bottom_button_stack = QStackedWidget()
+        self._create_normal_buttons()
         self.layout.addWidget(self.bottom_button_stack)
-        self.status_bar = QStatusBar(); self.layout.addWidget(self.status_bar); self.status_bar.showMessage("Ready.")
+        
+        self.status_bar = QStatusBar()
+        self.layout.addWidget(self.status_bar)
+        self.status_bar.showMessage("Ready.")
+        
+        # Apply stylesheet
+        try:
+            with open(resource_path("styles.css"), "r") as f:
+                self.setStyleSheet(f.read())
+        except Exception as e:
+            print(f"Could not load stylesheet: {e}")
+            QApplication.instance().setStyle("Fusion")
+
 
     def _create_normal_buttons(self):
         normal_widget = QWidget(); bottom_controls = QHBoxLayout(normal_widget)
@@ -593,20 +616,11 @@ class Dashboard(QWidget):
         msg_box = QMessageBox(self); msg_box.setWindowTitle(title); msg_box.setText(message); msg_box.exec()
 
 if __name__ == "__main__":
+    # This ensures the app doesn't re-launch when built with PyInstaller
+    from multiprocessing import freeze_support
+    freeze_support()
+    
     app = QApplication(sys.argv)
-
-    try:
-        style_file = Path("styles.qss")
-        if not style_file.exists():
-            style_file = Path("styles.css")
-
-        if style_file.exists():
-            with open(style_file, "r") as f: app.setStyleSheet(f.read())
-        else:
-            app.setStyle("Fusion")
-    except Exception as e:
-        print(f"Could not load stylesheet: {e}"); app.setStyle("Fusion")
-
-    dashboard = Dashboard()
-    dashboard.show()
+    window = Dashboard()
+    window.show()
     sys.exit(app.exec())
