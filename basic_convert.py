@@ -4,6 +4,8 @@
 import subprocess
 import shlex
 from pathlib import Path
+from typing import List
+import concurrent.futures
 
 from models import MediaFile, ConversionSettings
 
@@ -18,26 +20,22 @@ def run_basic_conversion(media: MediaFile, settings: ConversionSettings):
     """
     media.status = "Remuxing"
     
-    # In a basic conversion, the output path is always next to the source.
     final_output_path = media.source_path.with_suffix(".mp4")
     temp_output_path = media.source_path.with_suffix(".temp.mp4")
     media.destination_path = final_output_path
     
-    # Pre-cleanup of any old temp files
     temp_output_path.unlink(missing_ok=True)
     
     try:
-        # Get original file size for comparison
         if media.source_path.exists():
             media.original_size_gb = media.source_path.stat().st_size / (1024**3)
 
-        # Build the simple FFmpeg remux command
         command = [
             "ffmpeg", "-y",
             "-i", str(media.source_path),
-            "-c:v", "copy",        # Copy the video stream without re-encoding
-            "-c:a", "copy",        # Copy the audio stream without re-encoding
-            "-sn",                 # Exclude (skip) all subtitle streams
+            "-c:v", "copy",
+            "-c:a", "copy",
+            "-sn",
             str(temp_output_path)
         ]
         
@@ -48,25 +46,20 @@ def run_basic_conversion(media: MediaFile, settings: ConversionSettings):
             media.status = "Dry Run (Basic)"
             return
 
-        # Execute the command
         subprocess.run(command, check=True, capture_output=True, text=True, encoding='utf-8')
         
-        # Rename the temp file to the final output file on success
         temp_output_path.rename(final_output_path)
         
         media.status = "Converted (Basic)"
         print(f"  -> Success: Remuxed '{media.filename}'")
 
-        # Get final file size and set details for the summary view
         if final_output_path.exists():
             media.converted_size_gb = final_output_path.stat().st_size / (1024**3)
         
         setattr(media, 'audio_conversion_details', "Copied (Remux)")
-        # Since we use -sn, no subs are processed. Clear any prior selections.
         media.burned_subtitle = None
         for track in media.subtitle_tracks:
             track.action = "ignore"
-
 
     except Exception as e:
         media.status = "Error (Basic)"
@@ -74,6 +67,25 @@ def run_basic_conversion(media: MediaFile, settings: ConversionSettings):
         media.error_message = f"Basic remux failed: {error_output.strip()[-250:]}"
         print(f"  -> [ERROR] {media.error_message}")
     finally:
-        # Ensure the temp file is deleted on failure
         if temp_output_path.exists():
             temp_output_path.unlink()
+
+def run_batch_basic_conversion(media_files: List[MediaFile], settings: ConversionSettings):
+    """
+    Performs basic remuxing for a batch of files concurrently.
+
+    Args:
+        media_files: A list of MediaFile objects to process.
+        settings: The application's conversion settings.
+    """
+    print(f"Starting basic conversion for {len(media_files)} files using up to 3 threads.")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [executor.submit(run_basic_conversion, media, settings) for media in media_files]
+        
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                future.result()
+            except Exception as exc:
+                print(f'A basic conversion task generated an exception: {exc}')
+
+    return media_files

@@ -1,5 +1,5 @@
 # dashboard.py
-# Version: 2.7
+# Version: 2.8
 # This is the main PyQt6 GUI for the media conversion tool. It orchestrates the scanning,
 # user selection, conversion, and file transfer processes by calling the other backend modules.
 
@@ -160,10 +160,7 @@ class MediaFileItemWidget(QFrame):
         self.media_file = media_file
         self.dashboard_ref = dashboard_ref
         self.setObjectName("MediaFileItemWidget")
-
-        # FIX: Initialize soft_copy_checkboxes in the constructor
         self.soft_copy_checkboxes: list[QCheckBox] = []
-
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(5, 5, 5, 5)
         header_layout = QHBoxLayout()
@@ -183,8 +180,6 @@ class MediaFileItemWidget(QFrame):
     def _create_selection_view(self):
         widget = QWidget()
         controls_layout = QHBoxLayout(widget)
-
-        # Panel 1: Source Information
         info_group = QGroupBox("Source Info")
         info_layout = QVBoxLayout()
         self.metadata_video_label = QLabel("Video: N/A")
@@ -198,8 +193,6 @@ class MediaFileItemWidget(QFrame):
         info_layout.addWidget(self.remux_checkbox)
         info_layout.addStretch()
         info_group.setLayout(info_layout)
-
-        # Panel 2: File & Subtitle Tools
         tools_group = QGroupBox("Tools")
         tools_layout = QVBoxLayout()
         self.rename_btn = QPushButton("✏️ Rename File...")
@@ -210,8 +203,6 @@ class MediaFileItemWidget(QFrame):
         tools_layout.addWidget(self.edit_sub_btn)
         tools_layout.addStretch()
         tools_group.setLayout(tools_layout)
-
-        # Panel 3: Subtitle Selection
         selection_group = QGroupBox("Subtitle Selection")
         selection_layout = QVBoxLayout()
         burn_in_layout = QVBoxLayout()
@@ -225,8 +216,6 @@ class MediaFileItemWidget(QFrame):
         selection_layout.addLayout(self.soft_copy_layout)
         selection_layout.addStretch()
         selection_group.setLayout(selection_layout)
-        
-        # Panel 4: Conversion Profile
         profile_group = QGroupBox("📊 Conversion Profile")
         profile_layout = QVBoxLayout()
         self.profile_video_label = QLabel("Video: N/A")
@@ -239,14 +228,11 @@ class MediaFileItemWidget(QFrame):
         profile_layout.addWidget(self.profile_copy_label)
         profile_layout.addStretch()
         profile_group.setLayout(profile_layout)
-
         controls_layout.addWidget(info_group)
         controls_layout.addWidget(tools_group)
         controls_layout.addWidget(selection_group, 1)
         controls_layout.addWidget(profile_group, 1)
-
         self.stack.addWidget(widget)
-
         self.burn_combo.currentIndexChanged.connect(self.update_conversion_profile_summary)
         self.remux_checkbox.stateChanged.connect(self.update_conversion_profile_summary)
         self.rename_btn.clicked.connect(self.open_rename_dialog)
@@ -443,14 +429,19 @@ class Dashboard(QWidget):
         return [self.file_list.itemWidget(item).media_file for item in selected_items]
 
     def _run_combined_conversion(self, files: List[MediaFile], settings: ConversionSettings, progress_callback: Callable):
-        for f in files: self.file_list.itemWidget(self.find_list_item(f)).update_media_file_from_ui()
+        for f in files:
+            self.file_list.itemWidget(self.find_list_item(f)).update_media_file_from_ui()
+        
         basic_files = [f for f in files if f.use_basic_conversion]
         advanced_files = [f for f in files if not f.use_basic_conversion]
+
         if basic_files:
-            for file in basic_files: basic_convert.run_basic_conversion(file, settings)
+            basic_convert.run_batch_basic_conversion(basic_files, settings)
+        
         if advanced_files:
             convert.convert_batch(advanced_files, settings, progress_callback)
         return files
+
     def start_conversion(self):
         files = self.get_selected_media_files();
         if not files: self.show_message("No Files", "No files to convert."); return
