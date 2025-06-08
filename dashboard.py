@@ -1,5 +1,5 @@
 # dashboard.py
-# Version: 2.9
+# Version: 3.0
 # This is the main PyQt6 GUI for the media conversion tool. It orchestrates the scanning,
 # user selection, conversion, and file transfer processes by calling the other backend modules.
 
@@ -70,33 +70,105 @@ class ConfigHandler:
 
 class SettingsWindow(QDialog):
     def __init__(self, config_handler: ConfigHandler, parent=None):
-        super().__init__(parent); self.config_handler = config_handler; self.setWindowTitle("Settings"); self.setMinimumWidth(500); self.layout = QVBoxLayout(self)
-        conv_group = QGroupBox("Conversion Settings"); conv_layout = QVBoxLayout(); self.nvenc_checkbox = QCheckBox("Use NVIDIA NVENC Hardware Acceleration"); self.two_pass_checkbox = QCheckBox("Use Smart 2-Pass Encoding (for quality and size control)"); self.delete_source_checkbox = QCheckBox("Delete original file after successful conversion")
+        super().__init__(parent)
+        self.config_handler = config_handler
+        self.setWindowTitle("Settings")
+        self.setMinimumWidth(550)
+        self.layout = QVBoxLayout(self)
+
+        conv_group = QGroupBox("Conversion Settings")
+        conv_layout = QVBoxLayout()
+
+        # NVENC Checkbox
+        self.nvenc_checkbox = QCheckBox("Enable GPU Encoding (NVIDIA NVENC)")
+        self.nvenc_checkbox.setToolTip("Faster and efficient—uses your graphics card instead of the CPU.")
+        conv_layout.addWidget(self.nvenc_checkbox)
+
+        # 2-Pass Checkbox
+        self.two_pass_checkbox = QCheckBox("Enable 2-Pass Mode (slower, better file size)")
+        self.two_pass_checkbox.setToolTip("Runs two scans over the file to optimize video quality and compression.")
+        conv_layout.addWidget(self.two_pass_checkbox)
+
+        # Delete Source Checkbox
+        self.delete_source_checkbox = QCheckBox("Delete Original File After Conversion")
+        self.delete_source_checkbox.setToolTip("⚠️ This action is permanent and cannot be undone.")
+        conv_layout.addWidget(self.delete_source_checkbox)
+
+        # Quality Level Field
+        quality_layout = QHBoxLayout()
+        quality_label = QLabel("Target Quality Level (lower = better quality):")
+        quality_label.setToolTip(
+            "Controls video compression strength. Lower = higher quality, larger file.\n"
+            "Recommended: 18–22.\n"
+            "Used for both CPU (CRF) and GPU (CQ) encoding."
+        )
+        quality_layout.addWidget(quality_label)
+        self.quality_spinbox = QSpinBox()
+        self.quality_spinbox.setRange(0, 51)
+        quality_layout.addWidget(self.quality_spinbox)
+        conv_layout.addLayout(quality_layout)
         
-        # FIX: Make the quality label generic and add a helpful tooltip
-        crf_layout = QHBoxLayout()
-        quality_label = QLabel("Video Quality (lower = higher quality):")
-        quality_label.setToolTip("Controls visual quality. Lower = better quality, higher = smaller file.\n- Uses CRF for software encoding (e.g., libx264)\n- Uses CQ for hardware encoding (e.g., NVENC)")
-        crf_layout.addWidget(quality_label)
-        self.crf_spinbox = QSpinBox()
-        self.crf_spinbox.setRange(0, 51)
-        crf_layout.addWidget(self.crf_spinbox)
+        conv_group.setLayout(conv_layout)
+        self.layout.addWidget(conv_group)
+
+        # Directory Settings
+        self.layout.addWidget(QLabel("Default Output Directory:"))
+        output_dir_layout = QHBoxLayout()
+        self.output_dir_edit = QLineEdit()
+        self.browse_output_btn = QPushButton("Browse...")
+        output_dir_layout.addWidget(self.output_dir_edit)
+        output_dir_layout.addWidget(self.browse_output_btn)
+        self.layout.addLayout(output_dir_layout)
         
-        conv_layout.addWidget(self.nvenc_checkbox); conv_layout.addWidget(self.two_pass_checkbox); conv_layout.addWidget(self.delete_source_checkbox); conv_layout.addLayout(crf_layout); conv_group.setLayout(conv_layout); self.layout.addWidget(conv_group)
-        self.layout.addWidget(QLabel("Default Output Directory:")); output_dir_layout = QHBoxLayout(); self.output_dir_edit = QLineEdit(); self.browse_output_btn = QPushButton("Browse..."); output_dir_layout.addWidget(self.output_dir_edit); output_dir_layout.addWidget(self.browse_output_btn); self.layout.addLayout(output_dir_layout)
-        self.dir_list_widget = QListWidget(); self.layout.addWidget(QLabel("Scan Directories:")); self.layout.addWidget(self.dir_list_widget); btn_layout = QHBoxLayout(); self.add_btn = QPushButton("Add Scan Directory..."); self.remove_btn = QPushButton("Remove Selected"); btn_layout.addWidget(self.add_btn); btn_layout.addWidget(self.remove_btn); self.layout.addLayout(btn_layout)
-        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel); self.layout.addWidget(self.button_box)
-        self.browse_output_btn.clicked.connect(lambda: self.browse_directory(self.output_dir_edit)); self.add_btn.clicked.connect(self.add_scan_directory); self.remove_btn.clicked.connect(lambda: self.dir_list_widget.takeItem(self.dir_list_widget.currentRow())); self.button_box.accepted.connect(self.save_and_accept); self.button_box.rejected.connect(self.reject); self.load_settings()
+        self.dir_list_widget = QListWidget()
+        self.layout.addWidget(QLabel("Scan Directories:"))
+        self.layout.addWidget(self.dir_list_widget)
+        btn_layout = QHBoxLayout()
+        self.add_btn = QPushButton("Add Scan Directory...")
+        self.remove_btn = QPushButton("Remove Selected")
+        btn_layout.addWidget(self.add_btn)
+        btn_layout.addWidget(self.remove_btn)
+        self.layout.addLayout(btn_layout)
+
+        # Save/Cancel Buttons
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        self.layout.addWidget(self.button_box)
+
+        # Connect signals
+        self.browse_output_btn.clicked.connect(lambda: self.browse_directory(self.output_dir_edit))
+        self.add_btn.clicked.connect(self.add_scan_directory)
+        self.remove_btn.clicked.connect(lambda: self.dir_list_widget.takeItem(self.dir_list_widget.currentRow()))
+        self.button_box.accepted.connect(self.save_and_accept)
+        self.button_box.rejected.connect(self.reject)
+        
+        self.load_settings()
+
     def load_settings(self):
-        self.nvenc_checkbox.setChecked(self.config_handler.get_setting("use_nvenc", True)); self.two_pass_checkbox.setChecked(self.config_handler.get_setting("use_two_pass", True)); self.delete_source_checkbox.setChecked(self.config_handler.get_setting("delete_source_on_success", False)); self.crf_spinbox.setValue(self.config_handler.get_setting("crf_value", 23)); self.output_dir_edit.setText(self.config_handler.get_setting("output_directory"))
-        self.dir_list_widget.clear(); self.dir_list_widget.addItems(self.config_handler.get_setting("scan_directories", []))
+        self.nvenc_checkbox.setChecked(self.config_handler.get_setting("use_nvenc", True))
+        self.two_pass_checkbox.setChecked(self.config_handler.get_setting("use_two_pass", True))
+        self.delete_source_checkbox.setChecked(self.config_handler.get_setting("delete_source_on_success", False))
+        self.quality_spinbox.setValue(self.config_handler.get_setting("crf_value", 23))
+        self.output_dir_edit.setText(self.config_handler.get_setting("output_directory"))
+        self.dir_list_widget.clear()
+        self.dir_list_widget.addItems(self.config_handler.get_setting("scan_directories", []))
+
     def browse_directory(self, line_edit: QLineEdit):
-        if folder := QFileDialog.getExistingDirectory(self, "Select Directory"): line_edit.setText(folder)
+        if folder := QFileDialog.getExistingDirectory(self, "Select Directory"):
+            line_edit.setText(folder)
+
     def add_scan_directory(self):
-        if folder := QFileDialog.getExistingDirectory(self, "Select Scan Directory"): self.dir_list_widget.addItem(folder)
+        if folder := QFileDialog.getExistingDirectory(self, "Select Scan Directory"):
+            self.dir_list_widget.addItem(folder)
+
     def save_and_accept(self):
-        self.config_handler.set_setting("use_nvenc", self.nvenc_checkbox.isChecked()); self.config_handler.set_setting("use_two_pass", self.two_pass_checkbox.isChecked()); self.config_handler.set_setting("delete_source_on_success", self.delete_source_checkbox.isChecked()); self.config_handler.set_setting("crf_value", self.crf_spinbox.value()); self.config_handler.set_setting("output_directory", self.output_dir_edit.text())
-        self.config_handler.set_setting("scan_directories", [self.dir_list_widget.item(i).text() for i in range(self.dir_list_widget.count())]); self.config_handler.save_config(); self.accept()
+        self.config_handler.set_setting("use_nvenc", self.nvenc_checkbox.isChecked())
+        self.config_handler.set_setting("use_two_pass", self.two_pass_checkbox.isChecked())
+        self.config_handler.set_setting("delete_source_on_success", self.delete_source_checkbox.isChecked())
+        self.config_handler.set_setting("crf_value", self.quality_spinbox.value())
+        self.config_handler.set_setting("output_directory", self.output_dir_edit.text())
+        self.config_handler.set_setting("scan_directories", [self.dir_list_widget.item(i).text() for i in range(self.dir_list_widget.count())])
+        self.config_handler.save_config()
+        self.accept()
 
 class SubtitlePreviewDialog(QDialog):
     def __init__(self, media_file: MediaFile, parent=None):
