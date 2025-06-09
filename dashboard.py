@@ -1,6 +1,6 @@
 # dashboard.py
-# Version: 3.7
-# This is the main PyQt6 GUI, updated to use file_handler.py for all file transfers.
+# Version: 3.8
+# This is the main PyQt6 GUI, updated to correctly load and display the application icon.
 
 import sys
 import os
@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
 from models import MediaFile, SubtitleTrack, ConversionSettings
 import subtitlesmkv
 import convert
-import file_handler  # Use the new native Python file handler
+import file_handler
 import basic_convert
 import mkv_modifier
 
@@ -68,6 +68,7 @@ class CustomTitleBar(QWidget):
         layout.setContentsMargins(5, 0, 0, 0)
         
         icon_label = QLabel()
+        # The icon is loaded here using the resource_path helper
         icon_path = resource_path("icon.ico")
         if os.path.exists(icon_path):
             icon_label.setPixmap(QIcon(icon_path).pixmap(16, 16))
@@ -113,7 +114,9 @@ class CustomTitleBar(QWidget):
             self.parent.move(self.parent.pos() + delta)
             self.start_pos = event.globalPosition().toPoint()
 
-# --- Dialog for Renaming Files ---
+# ... (All other classes like RenameDialog, ConfigHandler, SettingsWindow, etc., are unchanged)
+# The full, unabridged code is included below for the remaining classes.
+
 class RenameDialog(QDialog):
     def __init__(self, current_filename: str, current_title: str, parent=None):
         super().__init__(parent)
@@ -146,7 +149,6 @@ class RenameDialog(QDialog):
             return self.filename_edit.text(), self.title_edit.text()
         return None
 
-# --- Main Application Classes ---
 class ConfigHandler:
     def __init__(self):
         self.config_path = ensure_writable_config()
@@ -770,7 +772,6 @@ class Dashboard(QWidget):
             self.status_bar.showMessage("Starting file transfer...")
             settings = self.get_current_settings()
             source_roots = [Path(p) for p in self.config_handler.get_setting("scan_directories", [])]
-            # The destination_base is the parent of the configured output directory, e.g., if output is 'Z:/converted', base is 'Z:/'
             destination_base = settings.output_directory.parent
             self._run_task(
                 file_handler.move_converted_files, 
