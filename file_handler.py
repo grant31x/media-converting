@@ -1,24 +1,19 @@
 # file_handler.py
-# This module replaces robocopy.py for native Python file operations using shutil.
-# Updated to provide progress feedback to the GUI.
+# Updated to use a list of path mappings for flexible transfers.
 
 import shutil
 import json
 from pathlib import Path
 import logging
 from datetime import datetime
-from typing import List, Callable
+from typing import List, Callable, Dict
 
 from models import MediaFile
 
-# --- Configuration ---
 LOG_FILE = Path("./move_log.json")
-
-# Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 def read_move_log() -> dict:
-    """Reads the move log JSON file if it exists."""
     if not LOG_FILE.exists():
         return {}
     try:
@@ -28,7 +23,6 @@ def read_move_log() -> dict:
         return {}
 
 def write_move_log(log_data: dict):
-    """Writes data to the move log JSON file."""
     try:
         with open(LOG_FILE, "w", encoding="utf-8") as f:
             json.dump(log_data, f, indent=4)
@@ -37,23 +31,19 @@ def write_move_log(log_data: dict):
 
 def move_converted_files(
     media_files: List[MediaFile], 
-    destination_base: Path,
-    source_root_folders: List[Path],
+    path_mappings: List[Dict[str, str]],
     dry_run: bool = False,
     progress_callback: Callable = None
 ):
     """
-    Moves a list of converted files to their final destination using shutil.move,
-    providing progress updates via a callback.
+    Moves files based on a list of source-to-destination mappings.
     """
     move_log = read_move_log()
     total_files = len(media_files)
     
     for i, media in enumerate(media_files):
-        # The file to be moved is the one at the destination_path from the conversion step.
         converted_file_path = media.destination_path
         
-        # --- Report Progress ---
         if progress_callback:
             percent = int(((i + 1) / total_files) * 100)
             progress_callback(percent, f"Moving file {i+1} of {total_files}: {converted_file_path.name}")
@@ -62,17 +52,20 @@ def move_converted_files(
             logging.warning(f"Skipping '{media.filename}' - converted file not found at '{converted_file_path}'.")
             continue
 
-        original_source_root = None
-        for root in source_root_folders:
-            if root in media.source_path.parents:
-                original_source_root = root
+        # Find the correct destination from the mappings
+        final_destination_path = None
+        source_root_for_cleanup = None
+        for mapping in path_mappings:
+            source_root = Path(mapping["source"])
+            if source_root in media.source_path.parents:
+                # e.g., Z:/Movies/MyMovie.mp4
+                final_destination_path = Path(mapping["destination"]) / converted_file_path.name
+                source_root_for_cleanup = source_root
                 break
         
-        if not original_source_root:
-            logging.error(f"Could not determine source root for '{media.source_path}'. Skipping move.")
+        if not final_destination_path:
+            logging.error(f"No valid path mapping found for source '{media.source_path}'. Skipping.")
             continue
-
-        final_destination_path = destination_base / original_source_root.name / converted_file_path.name
         
         try:
             if dry_run:
@@ -95,7 +88,7 @@ def move_converted_files(
             
             original_parent_dir = media.source_path.parent
             if not media.source_path.exists() and original_parent_dir.exists():
-                if original_parent_dir not in source_root_folders:
+                if original_parent_dir != source_root_for_cleanup:
                     if not any(original_parent_dir.iterdir()):
                         logging.info(f"Source folder '{original_parent_dir}' is empty. Deleting.")
                         original_parent_dir.rmdir()

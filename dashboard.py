@@ -1,6 +1,6 @@
 # dashboard.py
 # Version: 3.8
-# This is the main PyQt6 GUI, updated to correctly load and display the application icon.
+# This is the main PyQt6 GUI, updated to use file_handler.py for all file transfers.
 
 import sys
 import os
@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
 from models import MediaFile, SubtitleTrack, ConversionSettings
 import subtitlesmkv
 import convert
-import file_handler
+import file_handler  # Use the new native Python file handler
 import basic_convert
 import mkv_modifier
 
@@ -68,7 +68,6 @@ class CustomTitleBar(QWidget):
         layout.setContentsMargins(5, 0, 0, 0)
         
         icon_label = QLabel()
-        # The icon is loaded here using the resource_path helper
         icon_path = resource_path("icon.ico")
         if os.path.exists(icon_path):
             icon_label.setPixmap(QIcon(icon_path).pixmap(16, 16))
@@ -114,9 +113,7 @@ class CustomTitleBar(QWidget):
             self.parent.move(self.parent.pos() + delta)
             self.start_pos = event.globalPosition().toPoint()
 
-# ... (All other classes like RenameDialog, ConfigHandler, SettingsWindow, etc., are unchanged)
-# The full, unabridged code is included below for the remaining classes.
-
+# --- Dialog for Renaming Files ---
 class RenameDialog(QDialog):
     def __init__(self, current_filename: str, current_title: str, parent=None):
         super().__init__(parent)
@@ -149,6 +146,7 @@ class RenameDialog(QDialog):
             return self.filename_edit.text(), self.title_edit.text()
         return None
 
+# --- Main Application Classes ---
 class ConfigHandler:
     def __init__(self):
         self.config_path = ensure_writable_config()
@@ -211,13 +209,17 @@ class SettingsWindow(QDialog):
         conv_layout.addLayout(quality_layout)
         conv_group.setLayout(conv_layout)
         self.layout.addWidget(conv_group)
-        self.layout.addWidget(QLabel("Default Output Directory:"))
-        output_dir_layout = QHBoxLayout()
-        self.output_dir_edit = QLineEdit()
-        self.browse_output_btn = QPushButton("Browse...")
-        output_dir_layout.addWidget(self.output_dir_edit)
-        output_dir_layout.addWidget(self.browse_output_btn)
-        self.layout.addLayout(output_dir_layout)
+        transfer_group = QGroupBox("Transfer Settings")
+        transfer_layout = QVBoxLayout()
+        transfer_layout.addWidget(QLabel("Final Destination Root (e.g., Z:/):"))
+        dest_path_layout = QHBoxLayout()
+        self.final_dest_edit = QLineEdit()
+        self.browse_dest_btn = QPushButton("Browse...")
+        dest_path_layout.addWidget(self.final_dest_edit)
+        dest_path_layout.addWidget(self.browse_dest_btn)
+        transfer_layout.addLayout(dest_path_layout)
+        transfer_group.setLayout(transfer_layout)
+        self.layout.addWidget(transfer_group)
         self.dir_list_widget = QListWidget()
         self.layout.addWidget(QLabel("Scan Directories:"))
         self.layout.addWidget(self.dir_list_widget)
@@ -229,7 +231,7 @@ class SettingsWindow(QDialog):
         self.layout.addLayout(btn_layout)
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         self.layout.addWidget(self.button_box)
-        self.browse_output_btn.clicked.connect(lambda: self.browse_directory(self.output_dir_edit))
+        self.browse_dest_btn.clicked.connect(lambda: self.browse_directory(self.final_dest_edit))
         self.add_btn.clicked.connect(self.add_scan_directory)
         self.remove_btn.clicked.connect(lambda: self.dir_list_widget.takeItem(self.dir_list_widget.currentRow()))
         self.button_box.accepted.connect(self.save_and_accept)
@@ -241,7 +243,7 @@ class SettingsWindow(QDialog):
         self.two_pass_checkbox.setChecked(self.config_handler.get_setting("use_two_pass", True))
         self.delete_source_checkbox.setChecked(self.config_handler.get_setting("delete_source_on_success", False))
         self.quality_spinbox.setValue(self.config_handler.get_setting("crf_value", 23))
-        self.output_dir_edit.setText(self.config_handler.get_setting("output_directory", str(Path.home() / "Videos" / "Converted")))
+        self.final_dest_edit.setText(self.config_handler.get_setting("final_destination", ""))
         self.dir_list_widget.clear()
         self.dir_list_widget.addItems(self.config_handler.get_setting("scan_directories", []))
 
@@ -258,7 +260,7 @@ class SettingsWindow(QDialog):
         self.config_handler.set_setting("use_two_pass", self.two_pass_checkbox.isChecked())
         self.config_handler.set_setting("delete_source_on_success", self.delete_source_checkbox.isChecked())
         self.config_handler.set_setting("crf_value", self.quality_spinbox.value())
-        self.config_handler.set_setting("output_directory", self.output_dir_edit.text())
+        self.config_handler.set_setting("final_destination", self.final_dest_edit.text())
         self.config_handler.set_setting("scan_directories", [self.dir_list_widget.item(i).text() for i in range(self.dir_list_widget.count())])
         self.config_handler.save_config()
         self.accept()
@@ -759,10 +761,15 @@ class Dashboard(QWidget):
             self.show_message("No Files to Transfer", "There are no successfully converted files ready to be moved.")
             return
 
+        final_destination = self.config_handler.get_setting("final_destination")
+        if not final_destination or not Path(final_destination).exists():
+            self.show_message("Destination Not Set", f"The final transfer destination ('{final_destination}') is not set or does not exist. Please set it in Settings.")
+            return
+
         reply = QMessageBox.question(
             self, "Confirm Transfer", 
-            f"You are about to move {len(files_to_move)} converted file(s) to the final destination.\n\n"
-            "This will flatten the directory structure and may delete empty source folders.\n"
+            f"You are about to move {len(files_to_move)} file(s) to '{final_destination}'.\n\n"
+            "This may flatten directory structures and delete empty source folders.\n"
             "This action cannot be undone. Do you want to proceed?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
@@ -770,9 +777,10 @@ class Dashboard(QWidget):
         
         if reply == QMessageBox.StandardButton.Yes:
             self.status_bar.showMessage("Starting file transfer...")
-            settings = self.get_current_settings()
+            
             source_roots = [Path(p) for p in self.config_handler.get_setting("scan_directories", [])]
-            destination_base = settings.output_directory.parent
+            destination_base = Path(final_destination)
+            
             self._run_task(
                 file_handler.move_converted_files, 
                 self.on_action_finished,
