@@ -1,7 +1,6 @@
 # dashboard.py
-# Version: 3.3
-# This is the main PyQt6 GUI, refactored for a clean, single-process PyInstaller build
-# with proper resource bundling and configuration management.
+# Version: 3.7
+# This is the main PyQt6 GUI, updated to use file_handler.py for all file transfers.
 
 import sys
 import os
@@ -11,7 +10,8 @@ import inspect
 from pathlib import Path
 from typing import List, Callable, Tuple, Dict, Any
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal, Qt
+from PyQt6.QtCore import QObject, QThread, pyqtSignal, Qt, QPoint
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QListWidget, QListWidgetItem,
     QLabel, QFileDialog, QFrame, QHBoxLayout, QComboBox, QCheckBox, QGroupBox,
@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
 from models import MediaFile, SubtitleTrack, ConversionSettings
 import subtitlesmkv
 import convert
-import robocopy
+import file_handler  # Use the new native Python file handler
 import basic_convert
 import mkv_modifier
 
@@ -42,9 +42,7 @@ def get_writable_config_path():
     return base / "MediaConverter" / "config.json"
 
 def ensure_writable_config():
-    """Ensures the runtime config file and its directory exist.
-    If it doesn't exist, it copies the default config from the bundled resources.
-    """
+    """Ensures the runtime config file and its directory exist."""
     config_path = get_writable_config_path()
     if not config_path.exists():
         config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -54,10 +52,66 @@ def ensure_writable_config():
             with open(config_path, "w", encoding="utf-8") as writable_f:
                 json.dump(default_data, writable_f, indent=4)
         except Exception as e:
-            print(f"Could not create initial config from bundled default: {e}. Writing empty config.")
+            print(f"Could not create initial config from bundled default: {e}.")
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump({}, f)
     return config_path
+
+# --- Custom Title Bar ---
+class CustomTitleBar(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.setObjectName("CustomTitleBar")
+        self.setFixedHeight(32)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(5, 0, 0, 0)
+        
+        icon_label = QLabel()
+        icon_path = resource_path("icon.ico")
+        if os.path.exists(icon_path):
+            icon_label.setPixmap(QIcon(icon_path).pixmap(16, 16))
+        
+        title_label = QLabel("G's Movie Converter")
+        title_label.setObjectName("TitleLabel")
+        
+        layout.addWidget(icon_label)
+        layout.addWidget(title_label)
+        layout.addStretch()
+
+        self.minimize_button = QPushButton("—")
+        self.maximize_button = QPushButton("🗖")
+        self.close_button = QPushButton("✕")
+        
+        self.minimize_button.setObjectName("MinimizeButton")
+        self.maximize_button.setObjectName("MaximizeButton")
+        self.close_button.setObjectName("CloseButton")
+        
+        self.minimize_button.clicked.connect(self.parent.showMinimized)
+        self.maximize_button.clicked.connect(self.toggle_maximize)
+        self.close_button.clicked.connect(self.parent.close)
+
+        layout.addWidget(self.minimize_button)
+        layout.addWidget(self.maximize_button)
+        layout.addWidget(self.close_button)
+
+        self.start_pos = None
+
+    def toggle_maximize(self):
+        if self.parent.isMaximized():
+            self.parent.showNormal()
+        else:
+            self.parent.showMaximized()
+            
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.start_pos = event.globalPosition().toPoint()
+
+    def mouseMoveEvent(self, event):
+        if self.start_pos:
+            delta = event.globalPosition().toPoint() - self.start_pos
+            self.parent.move(self.parent.pos() + delta)
+            self.start_pos = event.globalPosition().toPoint()
 
 # --- Dialog for Renaming Files ---
 class RenameDialog(QDialog):
@@ -65,16 +119,27 @@ class RenameDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Rename File")
         self.layout = QVBoxLayout(self)
+        self.layout.addWidget(QLabel("Metadata Title:"))
+        self.title_edit = QLineEdit(current_title)
+        self.layout.addWidget(self.title_edit)
         self.layout.addWidget(QLabel("Output Filename:"))
         self.filename_edit = QLineEdit(current_filename)
         self.layout.addWidget(self.filename_edit)
-        self.layout.addWidget(QLabel("Metadata Title (Optional):"))
-        self.title_edit = QLineEdit(current_title)
-        self.layout.addWidget(self.title_edit)
+        self.sync_checkbox = QCheckBox("Automatically update filename from title")
+        self.sync_checkbox.setChecked(True)
+        self.layout.addWidget(self.sync_checkbox)
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
         self.layout.addWidget(self.button_box)
+        self.title_edit.textChanged.connect(self.sync_filename_from_title)
+
+    def sync_filename_from_title(self, new_title: str):
+        if self.sync_checkbox.isChecked():
+            invalid_chars = r'[\\/:"*?<>|]'
+            cleaned_title = re.sub(invalid_chars, '', new_title).strip()
+            output_filename = f"{cleaned_title}.mp4"
+            self.filename_edit.setText(output_filename)
 
     def get_names(self) -> Tuple[str, str] | None:
         if self.exec() == QDialog.DialogCode.Accepted:
@@ -93,12 +158,10 @@ class ConfigHandler:
             with open(self.config_path, "r", encoding="utf-8") as f:
                 self.config = json.load(f)
         except (json.JSONDecodeError, IOError, FileNotFoundError):
-            print(f"Could not load runtime config from {self.config_path}.")
             try:
                 with open(resource_path("config.json"), "r", encoding="utf-8") as f:
                     self.config = json.load(f)
             except Exception as e:
-                print(f"FATAL: Could not load any config. Error: {e}")
                 self.config = {}
 
     def save_config(self):
@@ -255,11 +318,19 @@ class SubtitleEditorDialog(QDialog):
 
 class Worker(QObject):
     finished = pyqtSignal(object); error = pyqtSignal(tuple); progress = pyqtSignal(int, str)
+    item_status_changed = pyqtSignal(str, str)
+    item_progress = pyqtSignal(str, int)
+    
     def __init__(self, fn: Callable, *args, **kwargs):
         super().__init__(); self.fn, self.args, self.kwargs = fn, args, kwargs
     def run(self):
         try:
-            if 'progress_callback' in inspect.signature(self.fn).parameters: self.kwargs['progress_callback'] = lambda p, s: self.progress.emit(p, s)
+            if 'progress_callback' in inspect.signature(self.fn).parameters:
+                self.kwargs['progress_callback'] = lambda p, s: self.progress.emit(p, s)
+            if 'item_status_emitter' in inspect.signature(self.fn).parameters:
+                self.kwargs['item_status_emitter'] = lambda p, s: self.item_status_changed.emit(p, s)
+            if 'item_progress_emitter' in inspect.signature(self.fn).parameters:
+                self.kwargs['item_progress_emitter'] = lambda p, i: self.item_progress.emit(p, i)
             result = self.fn(*self.args, **self.kwargs); self.finished.emit(result)
         except Exception as e: import traceback; self.error.emit((type(e), e, traceback.format_exc()))
 
@@ -284,6 +355,7 @@ class MediaFileItemWidget(QFrame):
         self._create_selection_view()
         self._create_summary_view()
         self._create_metadata_editor_view()
+        self._create_progress_view()
         self.refresh_state()
 
     def _create_selection_view(self):
@@ -360,10 +432,18 @@ class MediaFileItemWidget(QFrame):
         dialog.exec()
 
     def _create_summary_view(self):
-        widget = QWidget(); summary_layout = QHBoxLayout(widget)
-        self.orig_size_label, self.new_size_label, self.size_change_label, self.audio_details_label, self.subs_details_label = QLabel(), QLabel(), QLabel(), QLabel(), QLabel()
-        for label in [self.orig_size_label, self.new_size_label, self.size_change_label, self.audio_details_label, self.subs_details_label]:
-            summary_layout.addWidget(label); summary_layout.addStretch()
+        widget = QWidget()
+        summary_layout = QVBoxLayout(widget)
+        self.orig_size_label = QLabel()
+        self.new_size_label = QLabel()
+        self.size_change_label = QLabel()
+        self.audio_details_label = QLabel()
+        self.subs_details_label = QLabel()
+        summary_layout.addWidget(self.orig_size_label)
+        summary_layout.addWidget(self.new_size_label)
+        summary_layout.addWidget(self.size_change_label)
+        summary_layout.addWidget(self.audio_details_label)
+        summary_layout.addWidget(self.subs_details_label)
         self.stack.addWidget(widget)
 
     def _create_metadata_editor_view(self):
@@ -382,6 +462,26 @@ class MediaFileItemWidget(QFrame):
         main_editor_layout.addWidget(preview_group)
         self.stack.addWidget(widget)
 
+    def _create_progress_view(self):
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        self.item_status_label = QLabel("Starting...")
+        self.item_progress_bar = QProgressBar()
+        layout.addWidget(self.item_status_label)
+        layout.addWidget(self.item_progress_bar)
+        self.stack.addWidget(widget)
+
+    def set_status_view(self, status: str):
+        self.stack.setCurrentIndex(3)
+        self.item_status_label.setText(status)
+        self.item_progress_bar.setValue(0)
+
+    def update_item_progress(self, percent: int, status_text: str):
+        if self.stack.currentIndex() != 3:
+            self.stack.setCurrentIndex(3)
+        self.item_status_label.setText(status_text)
+        self.item_progress_bar.setValue(percent)
+        
     def show_conversion_preview(self, switch_to_view=True):
         self.update_media_file_from_ui()
         settings = self.dashboard_ref.get_current_settings()
@@ -393,21 +493,29 @@ class MediaFileItemWidget(QFrame):
     def refresh_state(self):
         new_title = getattr(self.media_file, 'title', self.media_file.filename)
         self.filename_label.setText(f"<b>{new_title}</b> → <i>{self.media_file.output_filename}</i>")
-        self.status_label.setText(f"Status: {self.media_file.status}")
+        status = self.media_file.status
+        self.status_label.setText(f"Status: {status}")
         
-        if self.media_file.status in ["Converted", "Transferred", "Skipped (Exists)", "Converted (Basic)"]:
-            self.orig_size_label.setText(f"Original: {self.media_file.original_size_gb:.2f} GB"); self.new_size_label.setText(f"Converted: {self.media_file.converted_size_gb:.2f} GB")
-            self.size_change_label.setText(f"Change: {self.media_file.size_change_percent:+.2f}%"); self.audio_details_label.setText(f"Audio: {getattr(self.media_file, 'audio_conversion_details', 'N/A')}")
-            burned_sub = next((s.title or f"Track {s.index}" for s in self.media_file.subtitle_tracks if s.action == 'burn'), "None")
-            copied_subs = ", ".join([s.title or f"Track {s.index}" for s in self.media_file.subtitle_tracks if s.action == 'copy']) or "None"
-            self.subs_details_label.setText(f"Subs Burned: {burned_sub} | Copied: {copied_subs}"); self.stack.setCurrentIndex(1)
-        else:
+        if status in ["Preparing", "Queued", "Remuxing", "Encoding Pass 1/2", "Encoding Pass 2/2"]:
+            self.set_status_view(status)
+        elif status in ["Converted", "Transferred", "Skipped (Exists)", "Converted (Basic)", "Error"]:
+            self.stack.setCurrentIndex(1)
+            self.orig_size_label.setText(f"Original: {self.media_file.original_size_gb:.2f} GB")
+            self.new_size_label.setText(f"Converted: {self.media_file.converted_size_gb:.2f} GB")
+            self.size_change_label.setText(f"Change: {self.media_file.size_change_percent:+.2f}%")
+            self.audio_details_label.setText(f"Audio: {getattr(self.media_file, 'audio_conversion_details', 'N/A')}")
+            burned_sub = next((s.get_display_name() for s in self.media_file.subtitle_tracks if s.action == 'burn'), "None")
+            copied_subs = ", ".join([s.get_display_name() for s in self.media_file.subtitle_tracks if s.action == 'copy']) or "None"
+            self.subs_details_label.setText(f"Subs Burned: {burned_sub} | Copied: {copied_subs}")
+            if status == "Error":
+                self.subs_details_label.setText(f"Error: {self.media_file.error_message}")
+        else: # Default "Ready" state
+            self.stack.setCurrentIndex(0)
             self.metadata_video_label.setText(f"Video: {self.media_file.video_codec}, {self.media_file.video_width}p")
             self.metadata_audio_label.setText(f"Audio: {self.media_file.audio_codec}, {self.media_file.audio_channels}ch")
             self.metadata_size_label.setText(f"Size: {self.media_file.original_size_gb:.2f} GB")
             self.populate_selection_controls()
             self.update_conversion_profile_summary()
-            self.stack.setCurrentIndex(0)
 
     def populate_selection_controls(self):
         self.burn_combo.blockSignals(True)
@@ -468,13 +576,26 @@ class MediaFileItemWidget(QFrame):
 class Dashboard(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Media Conversion Dashboard")
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        self.setWindowTitle("G's Movie Converter")
         self.setGeometry(100, 100, 1400, 800)
+        
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
+
+        self.title_bar = CustomTitleBar(self)
+        self.main_layout.addWidget(self.title_bar)
+        
+        self.content_widget = QWidget()
+        self.layout = QVBoxLayout(self.content_widget)
+        self.main_layout.addWidget(self.content_widget)
+        
         self.media_files_data: List[MediaFile] = []
         self.thread = None
         self.worker = None
         self.config_handler = ConfigHandler()
-        self.layout = QVBoxLayout(self)
+        
         top_controls = QHBoxLayout()
         self.scan_config_button = QPushButton("Scan Configured", clicked=self.scan_configured_folders)
         self.scan_custom_button = QPushButton("Scan Custom...", clicked=self.scan_custom_folder)
@@ -484,15 +605,20 @@ class Dashboard(QWidget):
         top_controls.addStretch()
         top_controls.addWidget(self.settings_button)
         self.layout.addLayout(top_controls)
+        
         self.file_list = QListWidget()
         self.file_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        self.file_list.itemSelectionChanged.connect(self.update_selection_styles)
         self.layout.addWidget(self.file_list, 1)
+        
         self.bottom_button_stack = QStackedWidget()
         self._create_normal_buttons()
         self.layout.addWidget(self.bottom_button_stack)
+        
         self.status_bar = QStatusBar()
         self.layout.addWidget(self.status_bar)
         self.status_bar.showMessage("Ready.")
+        
         try:
             with open(resource_path("styles.css"), "r") as f:
                 self.setStyleSheet(f.read())
@@ -516,10 +642,32 @@ class Dashboard(QWidget):
     def _run_task(self, task_function: Callable, on_finish: Callable, *args, **kwargs):
         self.set_buttons_enabled(False); self.status_bar.showMessage(f"Running {task_function.__name__}...")
         self.thread = QThread(); self.worker = Worker(task_function, *args, **kwargs); self.worker.moveToThread(self.thread)
+        self.worker.item_status_changed.connect(self.on_item_status_changed)
+        self.worker.item_progress.connect(self.on_item_progress)
         self.thread.started.connect(self.worker.run); self.worker.progress.connect(self.update_progress); self.worker.finished.connect(on_finish); self.worker.error.connect(self.on_task_error)
         self.worker.finished.connect(self.thread.quit); self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater); self.thread.finished.connect(lambda: self.set_buttons_enabled(True))
         self.thread.start()
+
+    def find_item_widget_by_path(self, file_path_str: str) -> MediaFileItemWidget | None:
+        """Finds the list item widget corresponding to a source file path."""
+        for i in range(self.file_list.count()):
+            item = self.file_list.item(i)
+            widget = self.file_list.itemWidget(item)
+            if str(widget.media_file.source_path) == file_path_str:
+                return widget
+        return None
+
+    def on_item_status_changed(self, file_path_str: str, status: str):
+        widget = self.find_item_widget_by_path(file_path_str)
+        if widget:
+            widget.media_file.status = status
+            widget.update_item_progress(widget.item_progress_bar.value(), status)
+
+    def on_item_progress(self, file_path_str: str, percent: int):
+        widget = self.find_item_widget_by_path(file_path_str)
+        if widget:
+            widget.update_item_progress(percent, widget.media_file.status)
 
     def set_buttons_enabled(self, enabled: bool):
         self.scan_config_button.setEnabled(enabled); self.scan_custom_button.setEnabled(enabled)
@@ -548,24 +696,31 @@ class Dashboard(QWidget):
             item_widget = MediaFileItemWidget(media_file, self); list_item = QListWidgetItem(self.file_list)
             list_item.setData(Qt.ItemDataRole.UserRole, media_file); list_item.setSizeHint(item_widget.sizeHint())
             self.file_list.addItem(list_item); self.file_list.setItemWidget(list_item, item_widget)
+        self.update_selection_styles()
     def get_selected_media_files(self) -> List[MediaFile]:
         selected_items = self.file_list.selectedItems()
         if not selected_items:
              return [self.file_list.itemWidget(self.file_list.item(i)).media_file for i in range(self.file_list.count())]
         return [self.file_list.itemWidget(item).media_file for item in selected_items]
 
-    def _run_combined_conversion(self, files: List[MediaFile], settings: ConversionSettings, progress_callback: Callable):
+    def _run_combined_conversion(self, files: List[MediaFile], settings: ConversionSettings, 
+                                 progress_callback: Callable, item_status_emitter: Callable, 
+                                 item_progress_emitter: Callable):
         for f in files:
-            self.file_list.itemWidget(self.find_list_item(f)).update_media_file_from_ui()
+            widget = self.find_item_widget_by_path(str(f.source_path))
+            if widget:
+                widget.update_media_file_from_ui()
+            item_status_emitter(str(f.source_path), "Queued")
         
         basic_files = [f for f in files if f.use_basic_conversion]
         advanced_files = [f for f in files if not f.use_basic_conversion]
 
         if basic_files:
-            basic_convert.run_batch_basic_conversion(basic_files, settings)
+            basic_convert.run_batch_basic_conversion(basic_files, settings, item_status_emitter)
         
         if advanced_files:
-            convert.convert_batch(advanced_files, settings, progress_callback)
+            convert.convert_batch(advanced_files, settings, progress_callback, item_status_emitter, item_progress_emitter)
+        
         return files
 
     def start_conversion(self):
@@ -593,11 +748,39 @@ class Dashboard(QWidget):
             use_two_pass=self.config_handler.get_setting("use_two_pass"))
 
     def start_transfer(self):
-        files_to_move = [mf for mf in self.media_files_data if mf.status in ["Converted", "Converted (Basic)"]];
-        if not files_to_move: self.show_message("No Files", "No successfully converted files to transfer."); return
-        self._run_task(robocopy.move_all_mp4s, self.on_action_finished, files_to_move)
+        files_to_move = [
+            mf for mf in self.media_files_data 
+            if mf.status in ["Converted", "Converted (Basic)"]
+        ]
 
-    def on_action_finished(self, result: List[MediaFile]):
+        if not files_to_move:
+            self.show_message("No Files to Transfer", "There are no successfully converted files ready to be moved.")
+            return
+
+        reply = QMessageBox.question(
+            self, "Confirm Transfer", 
+            f"You are about to move {len(files_to_move)} converted file(s) to the final destination.\n\n"
+            "This will flatten the directory structure and may delete empty source folders.\n"
+            "This action cannot be undone. Do you want to proceed?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.status_bar.showMessage("Starting file transfer...")
+            settings = self.get_current_settings()
+            source_roots = [Path(p) for p in self.config_handler.get_setting("scan_directories", [])]
+            # The destination_base is the parent of the configured output directory, e.g., if output is 'Z:/converted', base is 'Z:/'
+            destination_base = settings.output_directory.parent
+            self._run_task(
+                file_handler.move_converted_files, 
+                self.on_action_finished,
+                media_files=files_to_move, 
+                destination_base=destination_base,
+                source_root_folders=source_roots
+            )
+
+    def on_action_finished(self, result):
         self.refresh_ui(); self.status_bar.showMessage("Task finished successfully.")
 
     def find_list_item(self, media_file: MediaFile) -> QListWidgetItem | None:
@@ -634,6 +817,15 @@ class Dashboard(QWidget):
             item.setData(Qt.ItemDataRole.UserRole, new_media_file_state)
             widget.media_file = new_media_file_state
             widget.refresh_state()
+
+    def update_selection_styles(self):
+        for i in range(self.file_list.count()):
+            item = self.file_list.item(i)
+            widget = self.file_list.itemWidget(item)
+            if widget:
+                widget.setProperty("selected", item.isSelected())
+                widget.style().unpolish(widget)
+                widget.style().polish(widget)
 
     def on_task_error(self, error: Tuple):
         self.status_bar.showMessage(f"Error occurred: {error[1]}", 10000); advice = "\n\nAdvice: Missing output directory?" if "No such file or directory" in str(error[1]) else ""

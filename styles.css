@@ -1,29 +1,59 @@
-/* styles.qss - Professional Dark Theme for Media Conversion Dashboard */
+/* styles.css - Professional Dark Theme for Media Conversion Dashboard */
 
 /* --- General Window and Text --- */
 QWidget {
-    background-color: #1e2124; /* Very dark gray, almost black */
-    color: #e0e0e0; /* Off-white text for readability */
+    background-color: #1e2124;
+    color: #e0e0e0;
     font-family: "Segoe UI", "Helvetica Neue", "Arial", sans-serif;
     font-size: 10pt;
 }
 
-/* --- Buttons --- */
+/* --- Custom Title Bar --- */
+#CustomTitleBar {
+    background-color: #181a1d; /* Very dark background to distinguish it */
+    padding-left: 5px;
+}
+
+#TitleLabel {
+    color: #e0e0e0;
+    font-weight: bold;
+    padding-left: 5px;
+}
+
+#MinimizeButton, #MaximizeButton, #CloseButton {
+    background-color: transparent;
+    border: none;
+    color: #e0e0e0;
+    font-family: "Segoe UI Symbol", "Arial"; /* Font that has these symbols */
+    font-size: 12pt;
+    padding: 5px 15px;
+    font-weight: normal;
+}
+
+#MinimizeButton:hover, #MaximizeButton:hover {
+    background-color: #3d3d3d;
+}
+
+#CloseButton:hover {
+    background-color: #c42b1c; /* Red on hover for close */
+}
+
+/* --- General Buttons --- */
 QPushButton {
-    background-color: #0078d4; /* A slightly richer blue */
+    background-color: #0078d4;
     color: #ffffff;
-    border: 1px solid #005a9e; /* Darker blue border */
+    border: 1px solid #005a9e;
     padding: 8px 16px;
     border-radius: 4px;
     font-weight: bold;
 }
 
 QPushButton:hover {
-    background-color: #008cff; /* Lighter blue on hover */
+    background-color: #008cff;
 }
 
 QPushButton:pressed {
-    background-color: #005a9e; /* Darker blue when pressed */
+    background-color: #005a9e;
 }
 
 QPushButton:disabled {
@@ -34,32 +64,39 @@ QPushButton:disabled {
 
 /* --- List Widget where items are displayed --- */
 QListWidget {
-    background-color: #282b30; /* Darker mid-gray */
+    background-color: #282b30;
     border: 1px solid #40444b;
     border-radius: 4px;
 }
 
-/* --- Group Boxes for subtitle selection --- */
+/* --- Group Boxes --- */
 QGroupBox {
-    background-color: transparent; /* Make it blend with the item background */
+    background-color: transparent;
     border: 1px solid #40444b;
     border-radius: 4px;
     margin-top: 10px;
-    padding: 20px 10px 10px 10px; /* Increased top padding to avoid smashing text */
+    padding: 10px;
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
     padding: 0 5px;
-    color: #b0b0b0; /* Lighter gray for group titles */
+    color: #b0b0b0;
 }
 
-/* Custom styling for the item container frame to give it a border */
+/* Custom styling for the item container frame */
 QFrame[objectName="MediaFileItemWidget"] {
     border: 1px solid #40444b;
     border-radius: 5px;
-    background-color: #36393f; /* Slightly lighter gray for each item */
+    background-color: #36393f;
+    margin-bottom: 3px;
+}
+
+/* Style for selected items */
+QFrame[objectName="MediaFileItemWidget"][selected="true"] {
+    background-color: #4a4e56;
+    border: 1px solid #0078d4;
 }
 
 
@@ -75,7 +112,7 @@ QComboBox::drop-down {
     border: none;
 }
 
-QComboBox QAbstractItemView { /* Style the dropdown list itself */
+QComboBox QAbstractItemView {
     background-color: #282b30;
     border: 1px solid #555;
     selection-background-color: #0078d4;
@@ -94,7 +131,6 @@ QLineEdit, QTextEdit, QSpinBox {
     color: #e0e0e0;
 }
 
-/* FIX: Improved SpinBox arrows */
 QSpinBox::up-button, QSpinBox::down-button {
     subcontrol-origin: border;
     width: 20px;
@@ -102,15 +138,13 @@ QSpinBox::up-button, QSpinBox::down-button {
     background-color: #36393f;
     border: 1px solid #555;
 }
+
 QSpinBox::up-button { 
-    subcontrol-position: top right; 
-    image: url(C:/Users/apgra/Downloads/up-arrow.png); /* Replace with a path to your up arrow icon */
+    subcontrol-position: top right;
 }
 QSpinBox::down-button { 
-    subcontrol-position: bottom right; 
-    image: url(C:/Users/apgra/Downloads/down-arrow.png); /* Replace with a path to your down arrow icon */
+    subcontrol-position: bottom right;
 }
-
 
 /* --- Status Bar --- */
 QStatusBar {
