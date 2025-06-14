@@ -83,3 +83,10 @@ def run_basic_conversion(media: MediaFile, settings: ConversionSettings):
     finally:
         if temp_output_path.exists():
             temp_output_path.unlink()
+
+def run_batch_basic_conversion(media_files: List[MediaFile], settings: ConversionSettings):
+    """
+    Performs a basic remux for a list of media files.
+    """
+    for media in media_files:
+        run_basic_conversion(media, settings)

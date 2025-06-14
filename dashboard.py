@@ -1,6 +1,6 @@
 # dashboard.py
-# Version: 4.4.9
-# Implements a more intelligent search query cleaning function.
+# Version: 4.5.0
+# Fixes the metadata search dialog flow.
 
 import sys
 import os
@@ -59,36 +59,17 @@ def ensure_writable_config():
                 json.dump({}, f)
     return config_path
 
-# --- NEW: Greatly improved search query cleaning function ---
 def _clean_search_query(filename: str) -> str:
-    """
-    Cleans a filename to extract the most likely movie title for an API search.
-    This version focuses on splitting the title at the first sign of metadata.
-    """
     clean_title = Path(filename).stem
-    
-    # Delimiters that often mark the end of a title and the start of metadata.
-    # The order is important: check for years first.
     delimiters = [
-        r'(19|20)\d{2}',  # Year (e.g., 2024)
-        '4k', '2160p', '1080p', '720p', '480p',
+        r'(19|20)\d{2}', '4k', '2160p', '1080p', '720p', '480p',
         'bluray', 'web-dl', 'webdl', 'webrip', 'hdrip', 'dvdrip', 'brrip', 'hdtv',
         'extended', 'uncut', 'remastered', 'theatrical',
     ]
-    
-    # Create a regex pattern to split the string at the first occurrence of any delimiter
-    # We use word boundaries (\b) to avoid splitting in the middle of a word.
     split_pattern = r'\b(' + '|'.join(delimiters) + r')\b'
-    
-    # Split the string at the first delimiter, keeping only the part before it
     clean_title = re.split(split_pattern, clean_title, maxsplit=1, flags=re.IGNORECASE)[0]
-    
-    # Replace common separators with spaces
     clean_title = re.sub(r'[\._-]', ' ', clean_title)
-    
-    # Remove any remaining junk and consolidate whitespace
     clean_title = ' '.join(clean_title.split()).strip()
-    
     return clean_title
 
 # --- All Helper and Custom Widget Classes Defined First ---
@@ -187,9 +168,6 @@ class MetadataSearchDialog(QDialog):
         
         clean_query = _clean_search_query(query)
         
-        print(f"[DEBUG] Original Filename: '{query}'")
-        print(f"[DEBUG] Cleaned Query: '{clean_query}', Year: {year}")
-        
         self.search_label.setText(f"Searching for: <b>{clean_query}</b> (Year: {year or 'Any'})")
 
         self.worker = Worker(tmdb_client.search_movie, clean_query, year)
@@ -220,10 +198,9 @@ class MetadataSearchDialog(QDialog):
         self.stop_thread()
 
     def get_selected_movie(self) -> Optional[Dict]:
-        if self.result() == QDialog.DialogCode.Accepted:
-            selected_item = self.results_list.currentItem()
-            if selected_item and selected_item.data(Qt.ItemDataRole.UserRole):
-                return selected_item.data(Qt.ItemDataRole.UserRole)
+        selected_item = self.results_list.currentItem()
+        if selected_item and selected_item.data(Qt.ItemDataRole.UserRole):
+            return selected_item.data(Qt.ItemDataRole.UserRole)
         return None
 
     def accept(self):
@@ -329,6 +306,7 @@ class RenameDialog(QDialog):
             return filename, title, year, comment
         return None
 
+# ... Other classes like PathMappingDialog, ConfigHandler, SettingsWindow are unchanged ...
 class PathMappingDialog(QDialog):
     def __init__(self, parent=None, source="", destination=""):
         super().__init__(parent)
@@ -572,14 +550,7 @@ class SettingsWindow(QDialog):
         
         self.config_handler.save_config()
         self.accept()
-
-# All other classes (Worker, MediaFileItemWidget, Dashboard, etc.) follow below.
-# This structure ensures all classes are defined before they are instantiated.
-# Due to length limitations, only the top portion is shown, but the full script
-# should be used from the previous complete response, with the updated _clean_search_query function.
-
-# ... The rest of the file follows, same as the last complete version ...
-
+        
 class Worker(QObject):
     finished = pyqtSignal(object); error = pyqtSignal(tuple); progress = pyqtSignal(int, str)
     item_status_changed = pyqtSignal(str, str)
@@ -605,7 +576,6 @@ class MediaFileItemWidget(QFrame):
         self.dashboard_ref = dashboard_ref
         self.setObjectName("MediaFileItemWidget")
         
-        # --- Defensively ensure all required attributes exist ---
         for attr, default in [('title', self.media_file.source_path.stem), ('output_filename', self.media_file.source_path.with_suffix('.mp4').name), ('status', 'Ready'), ('subtitle_tracks', []), ('original_size_gb', 0.0), ('converted_size_gb', 0.0), ('size_change_percent', 0.0), ('error_message', ''), ('burned_subtitle', None), ('use_basic_conversion', False)]:
             if not hasattr(self.media_file, attr): setattr(self.media_file, attr, default)
         
@@ -689,6 +659,7 @@ class MediaFileItemWidget(QFrame):
         controls_layout.addWidget(profile_group, 1)
         self.stack.addWidget(widget)
         
+        # Connect signals to slots
         self.fetch_meta_btn.clicked.connect(self.open_metadata_fetch)
         self.burn_combo.currentIndexChanged.connect(self.update_conversion_profile_summary)
         self.remux_checkbox.stateChanged.connect(self.update_conversion_profile_summary)
@@ -697,17 +668,19 @@ class MediaFileItemWidget(QFrame):
         self.edit_sub_btn.clicked.connect(self.open_subtitle_editor)
 
     def open_metadata_fetch(self):
-        """Opens the TMDb search dialog."""
+        """Opens the TMDb search dialog and handles the result."""
         if not tmdb_client.get_api_key():
             QMessageBox.warning(self, "API Key Required", "Please set your TMDb API key in Settings first.")
             return
             
         search_dialog = MetadataSearchDialog(self.media_file.filename, self)
-        selected_movie = search_dialog.get_selected_movie()
         
-        if selected_movie:
-            # Open the edit dialog and pre-fill it with the fetched data
-            self.open_rename_dialog(fetched_data=selected_movie)
+        # *** FIX: Show the dialog modally using exec() and check the result ***
+        if search_dialog.exec() == QDialog.DialogCode.Accepted:
+            selected_movie = search_dialog.get_selected_movie()
+            if selected_movie:
+                # Open the edit dialog and pre-fill it with the fetched data
+                self.open_rename_dialog(fetched_data=selected_movie)
     
     def open_rename_dialog(self, fetched_data: Optional[Dict] = None):
         template = self.dashboard_ref.config_handler.get_setting("filename_template", "{title} ({year})")
@@ -725,6 +698,7 @@ class MediaFileItemWidget(QFrame):
             self.media_file.comment = comment
             self.refresh_state()
 
+    # ... rest of MediaFileItemWidget is unchanged ...
     def open_subtitle_preview(self):
         dialog = SubtitlePreviewDialog(self.media_file, self)
         dialog.exec()
@@ -801,7 +775,6 @@ class MediaFileItemWidget(QFrame):
         return title or lang.upper() or f"Track {index}"
 
     def refresh_state(self):
-        # Update output filename from template
         template = self.dashboard_ref.config_handler.get_setting("filename_template", "{title}")
         self.media_file.output_filename = self.media_file.generate_filename_from_template(template)
         
@@ -892,7 +865,11 @@ class MediaFileItemWidget(QFrame):
                 burn_idx = getattr(self.media_file.burned_subtitle, 'index', -1)
                 track_idx = getattr(track_data, 'index', -2)
                 if not (self.media_file.burned_subtitle and burn_idx == track_idx): track_data.action = "copy"
+
 class Dashboard(QWidget):
+    # ... The entire Dashboard class is unchanged, so it's omitted for brevity ...
+    # The fix was entirely within the MediaFileItemWidget class above.
+    # The full Dashboard class from the previous response remains correct.
     def __init__(self):
         super().__init__()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
@@ -1115,7 +1092,6 @@ class Dashboard(QWidget):
             return None
 
     def start_transfer(self):
-        # MODIFIED: Select all .mp4 files plus any other files that were successfully converted.
         files_to_transfer = [
             mf for mf in self.media_files_data 
             if mf.source_path.suffix.lower() == '.mp4' 
@@ -1131,7 +1107,6 @@ class Dashboard(QWidget):
             self.show_message("Destination Not Set", "Please configure at least one path mapping in Settings before transferring files.")
             return
         
-        # MODIFIED: Update confirmation message
         reply = QMessageBox.question(self, "Confirm Transfer", 
             f"You are about to move {len(files_to_transfer)} file(s) (all .mp4s and converted files) to their configured destinations.\n\nThis action cannot be undone. Do you want to proceed?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
