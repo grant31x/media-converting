@@ -1,5 +1,5 @@
 # subtitlesmkv.py
-# Version: 2.2
+# Version: 2.3
 # This module scans media files and extracts subtitle track information or snippets.
 
 import subprocess
@@ -29,20 +29,24 @@ MKVTOOLNIX_PATH = Path("C:/Program Files/MKVToolNix/")
 MKVMERGE_PATH = MKVTOOLNIX_PATH / "mkvmerge.exe"
 MKVEXTRACT_PATH = MKVTOOLNIX_PATH / "mkvextract.exe"
 
-def scan_directory(directory_path: Path) -> List[MediaFile]:
-    """Scans a single directory recursively for .mkv files."""
+def scan_directory(directory_path: Path, file_types: List[str]) -> List[MediaFile]:
+    """Scans a single directory recursively for specified file types."""
     media_files = []
     if not MKVMERGE_PATH.exists():
         print(f"[ERROR] mkvmerge.exe not found at: {MKVMERGE_PATH}")
         return media_files
     if not directory_path.is_dir():
         return media_files
-    for file_path in directory_path.rglob("*.mkv"):
-        media_files.append(scan_file(file_path))
+    
+    # MODIFIED: Scan for all specified file types
+    for file_type in file_types:
+        for file_path in directory_path.rglob(f"*{file_type}"):
+            media_files.append(scan_file(file_path))
+            
     return media_files
 
 def scan_file(file_path: Path) -> MediaFile:
-    """Scans a single MKV file for subtitle and audio tracks using mkvmerge."""
+    """Scans a single media file for subtitle and audio tracks using mkvmerge."""
     media = MediaFile(source_path=file_path)
     media.status = "Scanning"
     try:

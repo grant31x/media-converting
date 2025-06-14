@@ -14,12 +14,17 @@ if sys.platform == "win32":
 else:
     CREATE_NO_WINDOW = 0
 
+# --- CONFIGURATION ---
+# PLEASE EDIT THIS PATH to point to your MKVToolNix installation directory.
+# This path should contain mkvmerge.exe.
 MKVTOOLNIX_PATH = Path("C:/Program Files/MKVToolNix/")
+# ---------------------
+
 MKVMERGE_PATH = MKVTOOLNIX_PATH / "mkvmerge.exe"
 
 def remove_subtitle_tracks(mkv_file: Path, track_ids_to_remove: List[int]) -> bool:
     if not MKVMERGE_PATH.exists():
-        logging.error(f"mkvmerge.exe not found at {MKVMERGE_PATH}. Cannot modify file.")
+        logging.error(f"mkvmerge.exe not found at {MKVMERGE_PATH}. Cannot modify file. Please check the MKVTOOLNIX_PATH in mkv_modifier.py.")
         return False
     temp_output_file = mkv_file.with_name(f"{mkv_file.stem}_modified.mkv")
     try:
@@ -45,7 +50,7 @@ def remove_subtitle_tracks(mkv_file: Path, track_ids_to_remove: List[int]) -> bo
         else:
             command.append("--no-subtitles")
         command.append(str(mkv_file))
-        print(f"Rewriting MKV to remove tracks {track_ids_to_remove}: {' '.join(command)}")
+        logging.info(f"Rewriting MKV to remove tracks {track_ids_to_remove}: {' '.join(command)}")
         subprocess.run(command, check=True, capture_output=True, text=True, encoding='utf-8', creationflags=CREATE_NO_WINDOW)
         if temp_output_file.exists() and temp_output_file.stat().st_size > 0:
             mkv_file.unlink()

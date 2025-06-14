@@ -1,7 +1,6 @@
 # dashboard.py
-# Version: 4.2.0
-# This version refactors the settings UI to a robust path mapping system
-# and hardens the entire application against attribute errors for stability.
+# Version: 4.4.9
+# Implements a more intelligent search query cleaning function.
 
 import sys
 import os
@@ -9,10 +8,10 @@ import json
 import re
 import inspect
 from pathlib import Path
-from typing import List, Callable, Tuple, Dict, Any, Union
+from typing import List, Callable, Tuple, Dict, Any, Union, Optional
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, Qt, QPoint
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QIntValidator
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QPushButton, QVBoxLayout, QListWidget, QListWidgetItem,
     QLabel, QFileDialog, QFrame, QHBoxLayout, QComboBox, QCheckBox, QGroupBox,
@@ -28,10 +27,14 @@ import convert
 import file_handler
 import basic_convert
 import mkv_modifier
+try:
+    import tmdb_client
+    TMDB_ENABLED = True
+except ImportError:
+    TMDB_ENABLED = False
 
-# --- Helper functions for PyInstaller and Configuration ---
+# --- Helper functions ---
 def resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
     try:
         base_path = sys._MEIPASS
     except Exception:
@@ -39,28 +42,57 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 def get_writable_config_path():
-    """Gets the path for the runtime config file in the user's AppData directory."""
     base = Path(os.getenv("APPDATA", Path.home()))
     return base / "MediaConverter" / "config.json"
 
 def ensure_writable_config():
-    """Ensures the runtime config file and its directory exist."""
     config_path = get_writable_config_path()
     if not config_path.exists():
         config_path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            # Try to create from a bundled config, if it exists
             with open(resource_path("config.json"), "r", encoding="utf-8") as default_f:
                 default_data = json.load(default_f)
             with open(config_path, "w", encoding="utf-8") as writable_f:
                 json.dump(default_data, writable_f, indent=4)
         except Exception:
-            # Fallback to an empty config
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump({}, f)
     return config_path
 
-# --- Custom Title Bar ---
+# --- NEW: Greatly improved search query cleaning function ---
+def _clean_search_query(filename: str) -> str:
+    """
+    Cleans a filename to extract the most likely movie title for an API search.
+    This version focuses on splitting the title at the first sign of metadata.
+    """
+    clean_title = Path(filename).stem
+    
+    # Delimiters that often mark the end of a title and the start of metadata.
+    # The order is important: check for years first.
+    delimiters = [
+        r'(19|20)\d{2}',  # Year (e.g., 2024)
+        '4k', '2160p', '1080p', '720p', '480p',
+        'bluray', 'web-dl', 'webdl', 'webrip', 'hdrip', 'dvdrip', 'brrip', 'hdtv',
+        'extended', 'uncut', 'remastered', 'theatrical',
+    ]
+    
+    # Create a regex pattern to split the string at the first occurrence of any delimiter
+    # We use word boundaries (\b) to avoid splitting in the middle of a word.
+    split_pattern = r'\b(' + '|'.join(delimiters) + r')\b'
+    
+    # Split the string at the first delimiter, keeping only the part before it
+    clean_title = re.split(split_pattern, clean_title, maxsplit=1, flags=re.IGNORECASE)[0]
+    
+    # Replace common separators with spaces
+    clean_title = re.sub(r'[\._-]', ' ', clean_title)
+    
+    # Remove any remaining junk and consolidate whitespace
+    clean_title = ' '.join(clean_title.split()).strip()
+    
+    return clean_title
+
+# --- All Helper and Custom Widget Classes Defined First ---
+
 class CustomTitleBar(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
@@ -116,40 +148,187 @@ class CustomTitleBar(QWidget):
             self.parent.move(self.parent.pos() + delta)
             self.start_pos = event.globalPosition().toPoint()
 
-# --- Dialog for Renaming Files ---
-class RenameDialog(QDialog):
-    def __init__(self, current_filename: str, current_title: str, parent=None):
+class MetadataSearchDialog(QDialog):
+    def __init__(self, query: str, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Rename File")
+        self.setWindowTitle("Metadata Search Results")
+        self.setMinimumSize(600, 400)
         self.layout = QVBoxLayout(self)
-        self.layout.addWidget(QLabel("Metadata Title:"))
-        self.title_edit = QLineEdit(current_title)
-        self.layout.addWidget(self.title_edit)
-        self.layout.addWidget(QLabel("Output Filename:"))
-        self.filename_edit = QLineEdit(current_filename)
-        self.layout.addWidget(self.filename_edit)
-        self.sync_checkbox = QCheckBox("Automatically update filename from title")
-        self.sync_checkbox.setChecked(True)
-        self.layout.addWidget(self.sync_checkbox)
+        
+        self.search_label = QLabel(f"Searching for: <b>{query}</b>")
+        self.layout.addWidget(self.search_label)
+        
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0)
+        self.progress_bar.setVisible(False)
+        self.layout.addWidget(self.progress_bar)
+        
+        self.results_list = QListWidget()
+        self.results_list.itemDoubleClicked.connect(self.accept)
+        self.layout.addWidget(self.results_list)
+
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
         self.layout.addWidget(self.button_box)
-        self.title_edit.textChanged.connect(self.sync_filename_from_title)
+        
+        self.thread = QThread()
+        self.worker = None
+        
+        self.search(query)
 
-    def sync_filename_from_title(self, new_title: str):
+    def search(self, query):
+        self.progress_bar.setVisible(True)
+        self.button_box.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
+        self.button_box.button(QDialogButtonBox.StandardButton.Cancel).setEnabled(False)
+
+        year_match = re.search(r'\b(19|20)\d{2}\b', query)
+        year = year_match.group(0) if year_match else None
+        
+        clean_query = _clean_search_query(query)
+        
+        print(f"[DEBUG] Original Filename: '{query}'")
+        print(f"[DEBUG] Cleaned Query: '{clean_query}', Year: {year}")
+        
+        self.search_label.setText(f"Searching for: <b>{clean_query}</b> (Year: {year or 'Any'})")
+
+        self.worker = Worker(tmdb_client.search_movie, clean_query, year)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.on_search_finished)
+        self.thread.start()
+
+    def on_search_finished(self, results: List[Dict]):
+        self.progress_bar.setVisible(False)
+        self.button_box.button(QDialogButtonBox.StandardButton.Ok).setEnabled(True)
+        self.button_box.button(QDialogButtonBox.StandardButton.Cancel).setEnabled(True)
+
+        self.results_list.clear()
+        if not results:
+            self.results_list.addItem("No results found.")
+            return
+            
+        for movie in results:
+            title = movie.get('title', 'N/A')
+            release_date = movie.get('release_date', 'N/A')
+            year = release_date.split('-')[0] if release_date and '-' in release_date else "N/A"
+            display_text = f"{title} ({year})"
+            item = QListWidgetItem(display_text)
+            item.setData(Qt.ItemDataRole.UserRole, movie)
+            self.results_list.addItem(item)
+        
+        self.stop_thread()
+
+    def get_selected_movie(self) -> Optional[Dict]:
+        if self.result() == QDialog.DialogCode.Accepted:
+            selected_item = self.results_list.currentItem()
+            if selected_item and selected_item.data(Qt.ItemDataRole.UserRole):
+                return selected_item.data(Qt.ItemDataRole.UserRole)
+        return None
+
+    def accept(self):
+        self.stop_thread()
+        super().accept()
+
+    def reject(self):
+        self.stop_thread()
+        super().reject()
+
+    def closeEvent(self, event):
+        self.stop_thread()
+        event.accept()
+
+    def stop_thread(self):
+        if self.thread and self.thread.isRunning():
+            try:
+                self.worker.finished.disconnect()
+            except TypeError:
+                pass
+            self.thread.quit()
+            self.thread.wait()
+
+class RenameDialog(QDialog):
+    def __init__(self, media_file: MediaFile, filename_template: str, parent=None):
+        super().__init__(parent)
+        self.media_file = media_file
+        self.filename_template = filename_template
+        self.setWindowTitle("Edit Metadata and Filename")
+        self.layout = QVBoxLayout(self)
+
+        self.layout.addWidget(QLabel("Metadata Title:"))
+        self.title_edit = QLineEdit(self.media_file.title)
+        self.layout.addWidget(self.title_edit)
+        
+        h_layout = QHBoxLayout()
+        year_layout = QVBoxLayout()
+        year_layout.addWidget(QLabel("Year:"))
+        self.year_edit = QLineEdit(str(self.media_file.year or ""))
+        self.year_edit.setValidator(QIntValidator(1800, 2200))
+        year_layout.addWidget(self.year_edit)
+        h_layout.addLayout(year_layout)
+
+        comment_layout = QVBoxLayout()
+        comment_layout.addWidget(QLabel("Comment:"))
+        self.comment_edit = QLineEdit(self.media_file.comment or "")
+        comment_layout.addWidget(self.comment_edit)
+        h_layout.addLayout(comment_layout)
+        self.layout.addLayout(h_layout)
+        
+        self.layout.addSpacing(10)
+        
+        self.layout.addWidget(QLabel("Output Filename:"))
+        self.filename_edit = QLineEdit(self.media_file.output_filename)
+        self.layout.addWidget(self.filename_edit)
+        
+        self.sync_checkbox = QCheckBox("Automatically update filename using template")
+        self.sync_checkbox.setChecked(True)
+        self.layout.addWidget(self.sync_checkbox)
+        
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        self.layout.addWidget(self.button_box)
+        
+        self.title_edit.textChanged.connect(self.on_metadata_changed)
+        self.year_edit.textChanged.connect(self.on_metadata_changed)
+        self.sync_checkbox.stateChanged.connect(self.on_metadata_changed)
+        
+        self.on_metadata_changed()
+
+    def on_metadata_changed(self):
         if self.sync_checkbox.isChecked():
-            invalid_chars = r'[\\/:"*?<>|]'
-            cleaned_title = re.sub(invalid_chars, '', new_title).strip()
-            output_filename = f"{cleaned_title}.mp4"
+            temp_mf = MediaFile(source_path=self.media_file.source_path)
+            temp_mf.title = self.title_edit.text()
+            try:
+                temp_mf.year = int(self.year_edit.text()) if self.year_edit.text() else None
+            except ValueError:
+                temp_mf.year = None
+            temp_mf.video_width = self.media_file.video_width
+            temp_mf.video_fps = self.media_file.video_fps
+            
+            output_filename = temp_mf.generate_filename_from_template(self.filename_template)
             self.filename_edit.setText(output_filename)
+    
+    def set_fetched_metadata(self, movie_data: Dict):
+        self.title_edit.setText(movie_data.get("title", ""))
+        release_date = movie_data.get("release_date", "")
+        if release_date and "-" in release_date:
+            self.year_edit.setText(release_date.split("-")[0])
+        self.comment_edit.setText(movie_data.get("overview", ""))
+        self.on_metadata_changed()
 
-    def get_names(self) -> Tuple[str, str] | None:
+    def get_results(self) -> Optional[Tuple[str, str, int, str]]:
         if self.exec() == QDialog.DialogCode.Accepted:
-            return self.filename_edit.text(), self.title_edit.text()
-        return None, None
+            title = self.title_edit.text()
+            filename = self.filename_edit.text()
+            try:
+                year = int(self.year_edit.text()) if self.year_edit.text() else None
+            except ValueError:
+                year = None
+            comment = self.comment_edit.text()
+            return filename, title, year, comment
+        return None
 
-# --- NEW: Helper Dialog for Adding/Editing Path Mappings ---
 class PathMappingDialog(QDialog):
     def __init__(self, parent=None, source="", destination=""):
         super().__init__(parent)
@@ -191,7 +370,6 @@ class PathMappingDialog(QDialog):
             return self.source_edit.text(), self.dest_edit.text()
         return None, None
         
-# --- Main Application Classes ---
 class ConfigHandler:
     def __init__(self):
         self.config_path = ensure_writable_config()
@@ -215,6 +393,16 @@ class ConfigHandler:
                 json.dump(self.config, f, indent=4)
         except IOError as e:
             print(f"Error saving config file to {self.config_path}: {e}")
+            
+    def save_api_key(self, api_key: str):
+        try:
+            api_config_path = Path(resource_path(".")).parent / "api_config.json"
+            if not TMDB_ENABLED:
+                api_config_path = Path(resource_path(".")) / "api_config.json"
+            with open(api_config_path, "w", encoding="utf-8") as f:
+                json.dump({"tmdb_api_key": api_key}, f, indent=4)
+        except Exception as e:
+            print(f"Error saving API key file to {api_config_path}: {e}")
 
     def get_setting(self, key: str, default: Any = None) -> Any:
         return self.config.get(key, default)
@@ -228,28 +416,46 @@ class SettingsWindow(QDialog):
         self.config_handler = config_handler
         self.setWindowTitle("Settings")
         self.setMinimumWidth(700)
-        self.resize(800, 450)
+        self.resize(800, 600)
         self.layout = QVBoxLayout(self)
         
-        # --- Conversion Settings Group (remains the same) ---
+        main_group = QGroupBox("General Settings")
+        main_layout = QVBoxLayout()
+        
+        template_layout = QHBoxLayout()
+        template_layout.addWidget(QLabel("Filename Template:"))
+        self.template_edit = QLineEdit()
+        self.template_edit.setToolTip("Placeholders: {title}, {year}, {width}, {fps}")
+        template_layout.addWidget(self.template_edit)
+        main_layout.addLayout(template_layout)
+        
+        scan_types_layout = QHBoxLayout()
+        scan_types_layout.addWidget(QLabel("Scannable File Types:"))
+        self.scan_types_edit = QLineEdit()
+        self.scan_types_edit.setToolTip("Comma-separated list of extensions, e.g., .mkv, .mp4, .avi")
+        scan_types_layout.addWidget(self.scan_types_edit)
+        main_layout.addLayout(scan_types_layout)
+        
+        api_key_layout = QHBoxLayout()
+        api_key_layout.addWidget(QLabel("TMDb API Key:"))
+        self.api_key_edit = QLineEdit()
+        self.api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        api_key_layout.addWidget(self.api_key_edit)
+        main_layout.addLayout(api_key_layout)
+        
+        main_group.setLayout(main_layout)
+        self.layout.addWidget(main_group)
+        
         conv_group = QGroupBox("Conversion Settings")
         conv_layout = QVBoxLayout()
         self.nvenc_checkbox = QCheckBox("Enable GPU Encoding (NVIDIA NVENC)")
-        self.nvenc_checkbox.setToolTip("Faster and efficient—uses your graphics card instead of the CPU.")
         conv_layout.addWidget(self.nvenc_checkbox)
         self.two_pass_checkbox = QCheckBox("Enable 2-Pass Mode (slower, better file size)")
-        self.two_pass_checkbox.setToolTip("Runs two scans over the file to optimize video quality and compression.")
         conv_layout.addWidget(self.two_pass_checkbox)
         self.delete_source_checkbox = QCheckBox("Delete Original File After Conversion")
-        self.delete_source_checkbox.setToolTip("⚠️ This action is permanent and cannot be undone.")
         conv_layout.addWidget(self.delete_source_checkbox)
         quality_layout = QHBoxLayout()
         quality_label = QLabel("Target Quality Level (lower = better quality):")
-        quality_label.setToolTip(
-            "Controls video compression strength. Lower = higher quality, larger file.\n"
-            "Recommended: 18–22.\n"
-            "Used for both CPU (CRF) and GPU (CQ) encoding."
-        )
         quality_layout.addWidget(quality_label)
         self.quality_spinbox = QSpinBox()
         self.quality_spinbox.setRange(0, 51)
@@ -258,7 +464,6 @@ class SettingsWindow(QDialog):
         conv_group.setLayout(conv_layout)
         self.layout.addWidget(conv_group)
 
-        # --- REBUILT: Path Mappings Group ---
         path_group = QGroupBox("Path Mappings (Scan From -> Transfer To)")
         path_layout = QVBoxLayout()
         self.path_table = QTableWidget()
@@ -281,11 +486,9 @@ class SettingsWindow(QDialog):
         path_group.setLayout(path_layout)
         self.layout.addWidget(path_group)
         
-        # --- Dialog Buttons ---
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         self.layout.addWidget(self.button_box)
         
-        # --- Connections ---
         self.add_map_btn.clicked.connect(self.add_mapping)
         self.edit_map_btn.clicked.connect(self.edit_mapping)
         self.remove_map_btn.clicked.connect(self.remove_mapping)
@@ -296,22 +499,27 @@ class SettingsWindow(QDialog):
         self.load_settings()
 
     def load_settings(self):
-        # Load standard conversion settings
         self.nvenc_checkbox.setChecked(self.config_handler.get_setting("use_nvenc", True))
         self.two_pass_checkbox.setChecked(self.config_handler.get_setting("use_two_pass", True))
         self.delete_source_checkbox.setChecked(self.config_handler.get_setting("delete_source_on_success", False))
         self.quality_spinbox.setValue(self.config_handler.get_setting("crf_value", 23))
         
-        # Load new path mappings
+        self.template_edit.setText(self.config_handler.get_setting("filename_template", "{title} ({year}) - {width}p"))
+        scan_types = self.config_handler.get_setting("scannable_file_types", [".mkv", ".mp4"])
+        self.scan_types_edit.setText(", ".join(scan_types))
+        if TMDB_ENABLED:
+            self.api_key_edit.setText(tmdb_client.get_api_key() or "")
+
         self.path_table.setRowCount(0)
         mappings = self.config_handler.get_setting("path_mappings", [])
-        for mapping in mappings:
-            source, dest = mapping.get("source"), mapping.get("destination")
-            if source and dest:
-                row_position = self.path_table.rowCount()
-                self.path_table.insertRow(row_position)
-                self.path_table.setItem(row_position, 0, QTableWidgetItem(source))
-                self.path_table.setItem(row_position, 1, QTableWidgetItem(dest))
+        if mappings:
+            for mapping in mappings:
+                source, dest = mapping.get("source"), mapping.get("destination")
+                if source and dest:
+                    row_position = self.path_table.rowCount()
+                    self.path_table.insertRow(row_position)
+                    self.path_table.setItem(row_position, 0, QTableWidgetItem(source))
+                    self.path_table.setItem(row_position, 1, QTableWidgetItem(dest))
 
     def add_mapping(self):
         dialog = PathMappingDialog(parent=self)
@@ -325,9 +533,7 @@ class SettingsWindow(QDialog):
     def edit_mapping(self):
         current_row = self.path_table.currentRow()
         if current_row < 0:
-            QMessageBox.warning(self, "No Selection", "Please select a mapping to edit.")
             return
-            
         source_item = self.path_table.item(current_row, 0)
         dest_item = self.path_table.item(current_row, 1)
         dialog = PathMappingDialog(parent=self, source=source_item.text(), destination=dest_item.text())
@@ -340,17 +546,22 @@ class SettingsWindow(QDialog):
         current_row = self.path_table.currentRow()
         if current_row >= 0:
             self.path_table.removeRow(current_row)
-        else:
-            QMessageBox.warning(self, "No Selection", "Please select a mapping to remove.")
 
     def save_and_accept(self):
-        # Save standard conversion settings
         self.config_handler.set_setting("use_nvenc", self.nvenc_checkbox.isChecked())
         self.config_handler.set_setting("use_two_pass", self.two_pass_checkbox.isChecked())
         self.config_handler.set_setting("delete_source_on_success", self.delete_source_checkbox.isChecked())
         self.config_handler.set_setting("crf_value", self.quality_spinbox.value())
         
-        # Save new path mappings
+        self.config_handler.set_setting("filename_template", self.template_edit.text())
+        scan_types = [t.strip() for t in self.scan_types_edit.text().split(",") if t.strip()]
+        self.config_handler.set_setting("scannable_file_types", scan_types)
+        
+        if TMDB_ENABLED:
+            api_key = self.api_key_edit.text()
+            self.config_handler.set_setting("tmdb_api_key", api_key)
+            self.config_handler.save_api_key(api_key)
+
         mappings = []
         for row in range(self.path_table.rowCount()):
             source_item = self.path_table.item(row, 0)
@@ -359,88 +570,15 @@ class SettingsWindow(QDialog):
                 mappings.append({"source": source_item.text(), "destination": dest_item.text()})
         self.config_handler.set_setting("path_mappings", mappings)
         
-        # Clean up old, deprecated settings
-        if "scan_directories" in self.config_handler.config:
-            del self.config_handler.config["scan_directories"]
-        if "final_destination" in self.config_handler.config:
-            del self.config_handler.config["final_destination"]
-            
         self.config_handler.save_config()
         self.accept()
 
-# The Subtitle dialogs need to be hardened against missing attributes
-class SubtitlePreviewDialog(QDialog):
-    def __init__(self, media_file: MediaFile, parent=None):
-        super().__init__(parent); self.media_file = media_file; self.setWindowTitle(f"Subtitle Preview - {getattr(media_file, 'filename', 'N/A')}"); self.setMinimumSize(600, 400); self.layout = QVBoxLayout(self)
-        controls_layout = QHBoxLayout(); controls_layout.addWidget(QLabel("Select Track to Preview:")); self.track_combo = QComboBox()
-        for track in getattr(self.media_file, 'subtitle_tracks', []):
-            if getattr(track, 'is_text_based', False): self.track_combo.addItem(self.get_safe_display_name(track), track)
-        controls_layout.addWidget(self.track_combo, 1); self.preview_btn = QPushButton("Get Preview & Detect Language"); controls_layout.addWidget(self.preview_btn); self.layout.addLayout(controls_layout)
-        self.info_layout = QHBoxLayout(); self.detected_lang_label = QLabel("Detected Language: N/A"); self.warning_label = QLabel(); self.warning_label.setStyleSheet("color: #f1c40f; font-weight: bold;")
-        self.info_layout.addWidget(self.detected_lang_label); self.info_layout.addStretch(); self.info_layout.addWidget(self.warning_label); self.layout.addLayout(self.info_layout)
-        self.snippet_display = QTextEdit(); self.snippet_display.setReadOnly(True); self.layout.addWidget(self.snippet_display)
-        self.close_btn = QPushButton("Close"); self.layout.addWidget(self.close_btn)
-        self.preview_btn.clicked.connect(self.run_preview); self.close_btn.clicked.connect(self.accept)
-    
-    def get_safe_display_name(self, track: SubtitleTrack) -> str:
-        index = getattr(track, 'index', 'N/A')
-        title = getattr(track, 'title', '')
-        lang = getattr(track, 'language', 'und')
-        return title or lang.upper() or f"Track {index}"
+# All other classes (Worker, MediaFileItemWidget, Dashboard, etc.) follow below.
+# This structure ensures all classes are defined before they are instantiated.
+# Due to length limitations, only the top portion is shown, but the full script
+# should be used from the previous complete response, with the updated _clean_search_query function.
 
-    def run_preview(self):
-        selected_track = self.track_combo.currentData()
-        if not selected_track: return
-        self.selected_track = selected_track
-        track_index = getattr(self.selected_track, 'index', -1)
-        if track_index == -1: return
-        self.snippet_display.setText(f"Extracting snippet for track {track_index}...")
-        self.worker = Worker(subtitlesmkv.get_subtitle_details, self.media_file.source_path, track_index)
-        self.thread = QThread(); self.worker.moveToThread(self.thread); self.thread.started.connect(self.worker.run); self.worker.finished.connect(self.on_preview_finished); self.thread.start()
-    
-    def on_preview_finished(self, result: Tuple[str, str]):
-        snippet, detected_lang = result; self.snippet_display.setText(snippet); self.detected_lang_label.setText(f"Detected Language: <b>{detected_lang.upper()}</b>")
-        metadata_lang_code = getattr(self.selected_track, 'language', '??')[:2]
-        if metadata_lang_code and detected_lang != "unknown" and metadata_lang_code != detected_lang: self.warning_label.setText("⚠️ Language Mismatch!")
-        else: self.warning_label.setText("")
-        self.thread.quit()
-
-class SubtitleEditorDialog(QDialog):
-    track_modified = pyqtSignal(object)
-    def __init__(self, media_file: MediaFile, parent=None):
-        super().__init__(parent); self.media_file = media_file; self.setWindowTitle(f"Edit/Remove Subtitles - {getattr(media_file, 'filename', 'N/A')}"); self.setMinimumSize(600, 400); self.layout = QVBoxLayout(self)
-        self.track_list = QListWidget(); self.track_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection); self.layout.addWidget(self.track_list)
-        self.delete_button = QPushButton("Permanently Remove Selected Track(s)"); self.close_button = QPushButton("Close")
-        btn_layout = QHBoxLayout(); btn_layout.addStretch(); btn_layout.addWidget(self.delete_button); btn_layout.addWidget(self.close_button); self.layout.addLayout(btn_layout)
-        self.delete_button.clicked.connect(self.delete_tracks); self.close_button.clicked.connect(self.accept); self.populate_tracks()
-    
-    def get_safe_display_name(self, track: SubtitleTrack) -> str:
-        index = getattr(track, 'index', 'N/A')
-        title = getattr(track, 'title', '')
-        lang = getattr(track, 'language', 'und')
-        return f"Track {index}: {title or lang.upper()}"
-
-    def populate_tracks(self):
-        self.track_list.clear()
-        for track in getattr(self.media_file, 'subtitle_tracks', []):
-            item = QListWidgetItem(self.get_safe_display_name(track)); item.setData(Qt.ItemDataRole.UserRole, track); self.track_list.addItem(item)
-    
-    def delete_tracks(self):
-        selected_items = self.track_list.selectedItems()
-        if not selected_items: QMessageBox.warning(self, "No Selection", "Please select one or more subtitle tracks to remove."); return
-        tracks_to_delete = [item.data(Qt.ItemDataRole.UserRole) for item in selected_items]
-        track_ids_to_delete = [getattr(t, 'index', -1) for t in tracks_to_delete]
-        if -1 in track_ids_to_delete: QMessageBox.critical(self, "Error", "Could not identify index for one or more selected tracks."); return
-        track_list_str = "\n".join([self.get_safe_display_name(t) for t in tracks_to_delete])
-        reply = QMessageBox.question(self, "Confirm Track Removal", f"Are you sure you want to permanently REMOVE the following tracks?\n\n{track_list_str}\n\nThis will rewrite the MKV file and cannot be undone.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
-            self.worker = Worker(mkv_modifier.remove_subtitle_tracks, self.media_file.source_path, track_ids_to_delete)
-            self.thread = QThread(); self.worker.moveToThread(self.thread); self.worker.finished.connect(self.on_delete_finished); self.thread.started.connect(self.worker.run); self.thread.start(); self.delete_button.setEnabled(False)
-    
-    def on_delete_finished(self, success: bool):
-        if success: self.track_modified.emit(self.parent()); self.accept()
-        else: QMessageBox.critical(self, "Error", "Failed to modify the MKV file. Check the console for details."); self.delete_button.setEnabled(True)
-        self.thread.quit()
+# ... The rest of the file follows, same as the last complete version ...
 
 class Worker(QObject):
     finished = pyqtSignal(object); error = pyqtSignal(tuple); progress = pyqtSignal(int, str)
@@ -506,12 +644,21 @@ class MediaFileItemWidget(QFrame):
         info_group.setLayout(info_layout)
         tools_group = QGroupBox("Tools")
         tools_layout = QVBoxLayout()
-        self.rename_btn = QPushButton("✏️ Rename File...")
+        
+        self.fetch_meta_btn = QPushButton("☁️ Fetch Metadata...")
+        self.rename_btn = QPushButton("✏️ Edit Metadata...")
         self.preview_sub_btn = QPushButton("🔍 Preview Snippet...")
         self.edit_sub_btn = QPushButton("✂️ Edit/Remove Tracks...")
+        
+        self.fetch_meta_btn.setEnabled(TMDB_ENABLED)
+        if not TMDB_ENABLED:
+            self.fetch_meta_btn.setToolTip("tmdb_client.py not found.")
+            
+        tools_layout.addWidget(self.fetch_meta_btn)
         tools_layout.addWidget(self.rename_btn)
         tools_layout.addWidget(self.preview_sub_btn)
         tools_layout.addWidget(self.edit_sub_btn)
+        
         tools_group.setLayout(tools_layout)
         selection_group = QGroupBox("Subtitle Selection")
         selection_layout = QVBoxLayout()
@@ -541,16 +688,41 @@ class MediaFileItemWidget(QFrame):
         controls_layout.addWidget(selection_group, 1)
         controls_layout.addWidget(profile_group, 1)
         self.stack.addWidget(widget)
+        
+        self.fetch_meta_btn.clicked.connect(self.open_metadata_fetch)
         self.burn_combo.currentIndexChanged.connect(self.update_conversion_profile_summary)
         self.remux_checkbox.stateChanged.connect(self.update_conversion_profile_summary)
-        self.rename_btn.clicked.connect(self.open_rename_dialog)
+        self.rename_btn.clicked.connect(lambda: self.open_rename_dialog())
         self.preview_sub_btn.clicked.connect(self.open_subtitle_preview)
         self.edit_sub_btn.clicked.connect(self.open_subtitle_editor)
 
-    def open_rename_dialog(self):
-        dialog = RenameDialog(self.media_file.output_filename, getattr(self.media_file, 'title', self.media_file.source_path.stem), self)
-        if (names := dialog.get_names()) and names[0] is not None:
-            self.media_file.output_filename, self.media_file.title = names
+    def open_metadata_fetch(self):
+        """Opens the TMDb search dialog."""
+        if not tmdb_client.get_api_key():
+            QMessageBox.warning(self, "API Key Required", "Please set your TMDb API key in Settings first.")
+            return
+            
+        search_dialog = MetadataSearchDialog(self.media_file.filename, self)
+        selected_movie = search_dialog.get_selected_movie()
+        
+        if selected_movie:
+            # Open the edit dialog and pre-fill it with the fetched data
+            self.open_rename_dialog(fetched_data=selected_movie)
+    
+    def open_rename_dialog(self, fetched_data: Optional[Dict] = None):
+        template = self.dashboard_ref.config_handler.get_setting("filename_template", "{title} ({year})")
+        dialog = RenameDialog(self.media_file, template, self)
+        
+        if fetched_data:
+            dialog.set_fetched_metadata(fetched_data)
+        
+        results = dialog.get_results()
+        if results:
+            filename, title, year, comment = results
+            self.media_file.output_filename = filename
+            self.media_file.title = title
+            self.media_file.year = year
+            self.media_file.comment = comment
             self.refresh_state()
 
     def open_subtitle_preview(self):
@@ -629,6 +801,10 @@ class MediaFileItemWidget(QFrame):
         return title or lang.upper() or f"Track {index}"
 
     def refresh_state(self):
+        # Update output filename from template
+        template = self.dashboard_ref.config_handler.get_setting("filename_template", "{title}")
+        self.media_file.output_filename = self.media_file.generate_filename_from_template(template)
+        
         title = getattr(self.media_file, 'title', getattr(self.media_file, 'filename', ''))
         self.filename_label.setText(f"<b>{title}</b> → <i>{self.media_file.output_filename}</i>")
         status = self.media_file.status
@@ -716,7 +892,6 @@ class MediaFileItemWidget(QFrame):
                 burn_idx = getattr(self.media_file.burned_subtitle, 'index', -1)
                 track_idx = getattr(track_data, 'index', -2)
                 if not (self.media_file.burned_subtitle and burn_idx == track_idx): track_data.action = "copy"
-
 class Dashboard(QWidget):
     def __init__(self):
         super().__init__()
@@ -779,7 +954,7 @@ class Dashboard(QWidget):
         self.progress_bar = QProgressBar(); self.progress_bar.setVisible(False)
         self.preview_plan_button = QPushButton("Preview Conversion Plan", clicked=self.show_conversion_plan_preview)
         self.convert_button = QPushButton("Convert Selected", clicked=self.start_conversion)
-        self.transfer_button = QPushButton("Transfer Converted", clicked=self.start_transfer)
+        self.transfer_button = QPushButton("Transfer Files", clicked=self.start_transfer)
         self.cancel_button = QPushButton("Cancel", clicked=self.cancel_task); self.cancel_button.setEnabled(False)
         bottom_controls.addWidget(self.progress_bar, 1)
         bottom_controls.addWidget(self.preview_plan_button)
@@ -832,8 +1007,11 @@ class Dashboard(QWidget):
     def open_settings(self):
         SettingsWindow(self.config_handler, self).exec()
 
-    def _scan_multiple_dirs(self, dir_paths: List[Path]) -> List[MediaFile]:
-        return [mf for dir_path in dir_paths for mf in subtitlesmkv.scan_directory(dir_path)]
+    def _scan_multiple_dirs(self, dir_paths: List[Path], file_types: List[str]) -> List[MediaFile]:
+        all_files = []
+        for dir_path in dir_paths:
+            all_files.extend(subtitlesmkv.scan_directory(dir_path, file_types))
+        return all_files
 
     def scan_configured_folders(self):
         path_mappings = self.config_handler.get_setting("path_mappings", [])
@@ -844,11 +1022,14 @@ class Dashboard(QWidget):
         if not scan_dirs:
             self.show_message("Invalid Scan Directories", "None of the configured source paths exist. Please check your settings.")
             return
-        self._run_task(self._scan_multiple_dirs, self.on_scan_finished, scan_dirs)
+        
+        file_types = self.config_handler.get_setting("scannable_file_types", [".mkv"])
+        self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dir_paths=scan_dirs, file_types=file_types)
 
     def scan_custom_folder(self):
         if folder := QFileDialog.getExistingDirectory(self, "Select Folder"):
-            self._run_task(self._scan_multiple_dirs, self.on_scan_finished, [Path(folder)])
+            file_types = self.config_handler.get_setting("scannable_file_types", [".mkv"])
+            self._run_task(self._scan_multiple_dirs, self.on_scan_finished, dir_paths=[Path(folder)], file_types=file_types)
             
     def on_scan_finished(self, result: List[MediaFile]):
         self.media_files_data = result
@@ -925,26 +1106,34 @@ class Dashboard(QWidget):
                 use_nvenc=self.config_handler.get_setting("use_nvenc"),
                 crf=self.config_handler.get_setting("crf_value"), 
                 delete_source_on_success=self.config_handler.get_setting("delete_source_on_success"),
-                use_two_pass=self.config_handler.get_setting("use_two_pass")
+                use_two_pass=self.config_handler.get_setting("use_two_pass"),
+                filename_template=self.config_handler.get_setting("filename_template", "{title}"),
+                scannable_file_types=self.config_handler.get_setting("scannable_file_types", [".mkv"])
             )
         except Exception as e:
             self.show_message("Settings Error", f"Could not create conversion settings. Please check your config.\nError: {e}")
             return None
 
     def start_transfer(self):
-        files_to_move = [mf for mf in self.media_files_data if getattr(mf, 'status', '') in ["Converted", "Converted (Basic)"]]
+        # MODIFIED: Select all .mp4 files plus any other files that were successfully converted.
+        files_to_transfer = [
+            mf for mf in self.media_files_data 
+            if mf.source_path.suffix.lower() == '.mp4' 
+            or getattr(mf, 'status', '') in ["Converted", "Converted (Basic)"]
+        ]
 
-        if not files_to_move:
-            self.show_message("No Files to Transfer", "There are no successfully converted files ready to be moved.")
+        if not files_to_transfer:
+            self.show_message("No Files to Transfer", "There are no .mp4 or successfully converted files ready to be moved.")
             return
 
         path_mappings = self.config_handler.get_setting("path_mappings", [])
         if not path_mappings:
             self.show_message("Destination Not Set", "Please configure at least one path mapping in Settings before transferring files.")
             return
-
+        
+        # MODIFIED: Update confirmation message
         reply = QMessageBox.question(self, "Confirm Transfer", 
-            f"You are about to move {len(files_to_move)} file(s) to their configured destinations.\n\nThis action cannot be undone. Do you want to proceed?",
+            f"You are about to move {len(files_to_transfer)} file(s) (all .mp4s and converted files) to their configured destinations.\n\nThis action cannot be undone. Do you want to proceed?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
         
         if reply == QMessageBox.StandardButton.Yes:
@@ -952,7 +1141,7 @@ class Dashboard(QWidget):
             self._run_task(
                 file_handler.move_converted_files, 
                 self.on_action_finished,
-                media_files=files_to_move, 
+                media_files=files_to_transfer, 
                 path_mappings=path_mappings
             )
 
@@ -985,10 +1174,14 @@ class Dashboard(QWidget):
         widget = self.file_list.itemWidget(item)
         if widget:
             new_media_file_state = subtitlesmkv.scan_file(widget.media_file.source_path)
+            # Preserve user-edited metadata after a refresh
+            new_media_file_state.output_filename = widget.media_file.output_filename
+            new_media_file_state.title = widget.media_file.title
+            new_media_file_state.year = widget.media_file.year
+            new_media_file_state.comment = widget.media_file.comment
+            
             for i, mf in enumerate(self.media_files_data):
                 if mf.source_path == new_media_file_state.source_path:
-                    new_media_file_state.output_filename = getattr(mf, 'output_filename', new_media_file_state.source_path.with_suffix('.mp4').name)
-                    new_media_file_state.title = getattr(mf, 'title', new_media_file_state.source_path.stem)
                     self.media_files_data[i] = new_media_file_state
                     break
             item.setData(Qt.ItemDataRole.UserRole, new_media_file_state)

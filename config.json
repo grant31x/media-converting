@@ -7,5 +7,15 @@
     "use_nvenc": true,
     "delete_source_on_success": false,
     "crf_value": 20,
-    "use_two_pass": false
+    "use_two_pass": false,
+    "scannable_file_types": [
+        ".mkv",
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".webm",
+        ".ts"
+    ],
+    "filename_template": "{title} ({year}) - {width}p",
+    "tmdb_api_key": ""
 }

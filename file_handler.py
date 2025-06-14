@@ -57,8 +57,9 @@ def move_converted_files(
         source_root_for_cleanup = None
         for mapping in path_mappings:
             source_root = Path(mapping["source"])
-            if source_root in media.source_path.parents:
-                # e.g., Z:/Movies/MyMovie.mp4
+            
+            # FIXED: Check if the file's parent is the source root OR a subdirectory of the source root.
+            if media.source_path.parent == source_root or source_root in media.source_path.parents:
                 final_destination_path = Path(mapping["destination"]) / converted_file_path.name
                 source_root_for_cleanup = source_root
                 break

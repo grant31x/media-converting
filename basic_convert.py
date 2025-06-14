@@ -23,7 +23,9 @@ def run_basic_conversion(media: MediaFile, settings: ConversionSettings):
     """
     media.status = "Remuxing"
     
-    final_output_path = media.source_path.with_suffix(".mp4")
+    # Regenerate filename from template in case metadata was changed
+    media.output_filename = media.generate_filename_from_template(settings.filename_template)
+    final_output_path = media.source_path.with_name(media.output_filename)
     temp_output_path = media.source_path.with_suffix(".temp.mp4")
     media.destination_path = final_output_path
     
@@ -38,9 +40,18 @@ def run_basic_conversion(media: MediaFile, settings: ConversionSettings):
             "-i", str(media.source_path),
             "-c:v", "copy",
             "-c:a", "copy",
-            "-sn",
-            str(temp_output_path)
+            "-sn", # Strips all subtitles
         ]
+        
+        # NEW: Add metadata flags
+        if media.title:
+            command.extend(["-metadata", f"title={media.title}"])
+        if media.year:
+            command.extend(["-metadata", f"date={media.year}"])
+        if media.comment:
+            command.extend(["-metadata", f"comment={media.comment}"])
+            
+        command.append(str(temp_output_path))
         
         print(f"\nProcessing (Basic): {media.filename}")
         print(f"  Command: {' '.join(shlex.quote(str(c)) for c in command)}")
@@ -72,18 +83,3 @@ def run_basic_conversion(media: MediaFile, settings: ConversionSettings):
     finally:
         if temp_output_path.exists():
             temp_output_path.unlink()
-
-def run_batch_basic_conversion(media_files: List[MediaFile], settings: ConversionSettings):
-    """
-    Performs basic remuxing for a batch of files concurrently.
-    """
-    print(f"Starting basic conversion for {len(media_files)} files using up to 3 threads.")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        futures = [executor.submit(run_basic_conversion, media, settings) for media in media_files]
-        
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                future.result()
-            except Exception as exc:
-                print(f'A basic conversion task generated an exception: {exc}')
-    return media_files

@@ -1,5 +1,5 @@
 # models.py
-# Version: 2.0
+# Version: 2.1
 # This file defines the data structures for the media conversion tool.
 
 import sys
@@ -32,13 +32,18 @@ class MediaFile:
     output_filename: str = field(init=False)
     destination_path: Optional[Path] = None
     
-    # NEW: Added more detailed metadata fields
+    # Metadata fields
     container: str = "N/A"
     video_codec: Optional[str] = None
     video_width: int = 0
     video_fps: float = 0.0
     audio_codec: Optional[str] = None
     audio_channels: int = 0
+    
+    # NEW: Fields for storing metadata
+    title: str = ""
+    year: Optional[int] = None
+    comment: Optional[str] = None
     
     subtitle_tracks: List[SubtitleTrack] = field(default_factory=list)
     burned_subtitle: Optional[SubtitleTrack] = None
@@ -49,13 +54,35 @@ class MediaFile:
 
     def __post_init__(self):
         self.filename = self.source_path.name
-        cleaned_stem = re.sub(r'[\[\]]', '', self.source_path.stem)
-        self.output_filename = f"{cleaned_stem.strip()}.mp4"
+        self.title = self.source_path.stem  # Default title is the source filename without extension
+        self.output_filename = f"{self.title}.mp4" # Default output name
         self.update_flags()
 
     def update_flags(self):
         self.has_forced_subtitles = any(track.is_forced for track in self.subtitle_tracks)
         
+    def generate_filename_from_template(self, template: str) -> str:
+        """Generates a filename from a template string and the file's metadata."""
+        if not template:
+            return f"{self.title}.mp4"
+            
+        replacements = {
+            "title": self.title or self.source_path.stem,
+            "year": str(self.year or ""),
+            "width": str(self.video_width),
+            "fps": str(round(self.video_fps or 0)),
+        }
+        
+        # Basic placeholder replacement
+        for key, value in replacements.items():
+            template = template.replace(f"{{{key}}}", value)
+            
+        # Clean up invalid filename characters
+        invalid_chars = r'[\\/:"*?<>|]'
+        cleaned_name = re.sub(invalid_chars, '', template).strip()
+        
+        return f"{cleaned_name}.mp4"
+
     def classify(self) -> str:
         """Determines if a file should be remuxed or fully converted."""
         if self.burned_subtitle: return "convert"
@@ -104,7 +131,9 @@ class MediaFile:
         
         plan.append("\n--- OUTPUT ---")
         plan.append(f"  Container: .mp4")
-        plan.append(f"  Output Path: {self.source_path.with_suffix('.mp4')}")
+        plan.append(f"  Output Path: {self.source_path.with_name(self.output_filename)}")
+        plan.append(f"  Embedded Title: {self.title or 'N/A'}")
+        plan.append(f"  Embedded Year: {self.year or 'N/A'}")
         
         return "\n".join(plan)
 
@@ -123,3 +152,5 @@ class ConversionSettings:
     audio_codec: str = "ac3"; audio_bitrate: str = "640k"; preset: str = "p7"
     crf: int = 23; output_directory: Path = Path("./converted"); dry_run: bool = False
     delete_source_on_success: bool = False
+    filename_template: str = "{title} ({year}) - {width}p" # NEW
+    scannable_file_types: List[str] = field(default_factory=lambda: [".mkv"]) # NEW

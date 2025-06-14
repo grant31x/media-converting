@@ -11,7 +11,6 @@ from typing import List, Tuple, Callable, Optional
 
 from models import MediaFile, SubtitleTrack, ConversionSettings
 from subtitlesmkv import verify_subtitle_language_is_english
-# The 'import robocopy' line that was here has been removed.
 
 # --- Platform-specific subprocess creation flags ---
 if sys.platform == "win32":
@@ -62,15 +61,17 @@ def convert_batch(media_files: List[MediaFile], settings: ConversionSettings,
                   stop_check: Callable[[], bool] = lambda: False):
     for i, media in enumerate(media_files):
         if stop_check(): break
-        if _should_skip_conversion(media): continue
+        if _should_skip_conversion(media, settings): continue
         def file_progress_update(percent, status):
             if progress_callback: progress_callback(percent, f"File {i+1}/{len(media_files)}: {media.filename} - {status}")
         convert_media_file(media, settings, file_progress_update, stop_check, item_status_emitter, item_progress_emitter)
     return media_files
 
-def _should_skip_conversion(media: MediaFile) -> bool:
+def _should_skip_conversion(media: MediaFile, settings: ConversionSettings) -> bool:
     if not media.needs_conversion: return True
-    final_output_path = media.source_path.with_suffix('.mp4')
+    # Update output filename from template before checking existence
+    media.output_filename = media.generate_filename_from_template(settings.filename_template)
+    final_output_path = media.source_path.with_name(media.output_filename)
     if final_output_path.exists(): media.status = "Skipped (Exists)"; return True
     return False
 
@@ -81,7 +82,12 @@ def convert_media_file(media: MediaFile, settings: ConversionSettings,
     if item_status_emitter:
         item_status_emitter(str(media.source_path), media.status)
 
-    final_output_path = media.source_path.with_suffix(".mp4"); temp_output_path = media.source_path.with_suffix(".temp.mp4"); media.destination_path = final_output_path
+    # Regenerate filename from template in case metadata was changed
+    media.output_filename = media.generate_filename_from_template(settings.filename_template)
+    final_output_path = media.source_path.with_name(media.output_filename)
+    temp_output_path = media.source_path.with_suffix(".temp.mp4")
+    media.destination_path = final_output_path
+    
     if media.source_path.exists(): media.original_size_gb = media.source_path.stat().st_size / (1024**3)
     if media.burned_subtitle and not verify_subtitle_language_is_english(media.source_path, media.burned_subtitle.index): media.burned_subtitle = None
     temp_output_path.unlink(missing_ok=True); pass_log_file = temp_output_path.with_suffix('.log')
@@ -135,5 +141,14 @@ def _build_ffmpeg_command(media: MediaFile, settings: ConversionSettings, output
         for i, sub in enumerate(s for s in media.subtitle_tracks if s.action == 'copy'):
             command.extend(["-map", f"0:s:{sub.ffmpeg_index}", f"-c:s:{i}", "mov_text"])
         command.extend(["-map", "0:v", "-map", "0:a"])
+        
+        # NEW: Add metadata flags
+        if media.title:
+            command.extend(["-metadata", f"title={media.title}"])
+        if media.year:
+            command.extend(["-metadata", f"date={media.year}"])
+        if media.comment:
+            command.extend(["-metadata", f"comment={media.comment}"])
+
         command.append(str(output_path))
     return command
