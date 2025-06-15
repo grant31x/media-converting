@@ -1,6 +1,6 @@
 # dashboard.py
-# Version: 4.5.0
-# Fixes the metadata search dialog flow.
+# Version: 4.5.2
+# Fixes class definition order.
 
 import sys
 import os
@@ -72,7 +72,26 @@ def _clean_search_query(filename: str) -> str:
     clean_title = ' '.join(clean_title.split()).strip()
     return clean_title
 
+
 # --- All Helper and Custom Widget Classes Defined First ---
+
+class Worker(QObject):
+    finished = pyqtSignal(object); error = pyqtSignal(tuple); progress = pyqtSignal(int, str)
+    item_status_changed = pyqtSignal(str, str)
+    item_progress = pyqtSignal(str, int)
+    
+    def __init__(self, fn: Callable, *args, **kwargs):
+        super().__init__(); self.fn, self.args, self.kwargs = fn, args, kwargs
+    def run(self):
+        try:
+            if 'progress_callback' in inspect.signature(self.fn).parameters:
+                self.kwargs['progress_callback'] = lambda p, s: self.progress.emit(p, s)
+            if 'item_status_emitter' in inspect.signature(self.fn).parameters:
+                self.kwargs['item_status_emitter'] = lambda p, s: self.item_status_changed.emit(p, s)
+            if 'item_progress_emitter' in inspect.signature(self.fn).parameters:
+                self.kwargs['item_progress_emitter'] = lambda p, i: self.item_progress.emit(p, i)
+            result = self.fn(*self.args, **self.kwargs); self.finished.emit(result)
+        except Exception as e: import traceback; self.error.emit((type(e), e, traceback.format_exc()))
 
 class CustomTitleBar(QWidget):
     def __init__(self, parent):
@@ -306,7 +325,6 @@ class RenameDialog(QDialog):
             return filename, title, year, comment
         return None
 
-# ... Other classes like PathMappingDialog, ConfigHandler, SettingsWindow are unchanged ...
 class PathMappingDialog(QDialog):
     def __init__(self, parent=None, source="", destination=""):
         super().__init__(parent)
@@ -374,9 +392,15 @@ class ConfigHandler:
             
     def save_api_key(self, api_key: str):
         try:
-            api_config_path = Path(resource_path(".")).parent / "api_config.json"
-            if not TMDB_ENABLED:
-                api_config_path = Path(resource_path(".")) / "api_config.json"
+            # This path logic needs to be robust for both dev and bundled mode
+            base_path = Path(resource_path("."))
+            if "MEIPASS" in base_path.as_posix():
+                # When bundled, api_config.json is at the root with dashboard.exe
+                api_config_path = base_path / "api_config.json"
+            else:
+                # In development, it's likely in the project root
+                 api_config_path = base_path / "api_config.json"
+            
             with open(api_config_path, "w", encoding="utf-8") as f:
                 json.dump({"tmdb_api_key": api_key}, f, indent=4)
         except Exception as e:
@@ -537,8 +561,8 @@ class SettingsWindow(QDialog):
         
         if TMDB_ENABLED:
             api_key = self.api_key_edit.text()
-            self.config_handler.set_setting("tmdb_api_key", api_key)
-            self.config_handler.save_api_key(api_key)
+            if api_key:
+                self.config_handler.save_api_key(api_key)
 
         mappings = []
         for row in range(self.path_table.rowCount()):
@@ -550,24 +574,144 @@ class SettingsWindow(QDialog):
         
         self.config_handler.save_config()
         self.accept()
+
+class SubtitlePreviewDialog(QDialog):
+    """A dialog to preview a snippet of a text-based subtitle track."""
+    def __init__(self, media_file: MediaFile, parent=None):
+        super().__init__(parent)
+        self.media_file = media_file
+        self.setWindowTitle("Subtitle Preview")
+        self.setMinimumSize(500, 400)
+        self.layout = QVBoxLayout(self)
+        self.thread = None
+        self.worker = None
+
+        self.track_combo = QComboBox()
+        self.layout.addWidget(QLabel("Select a subtitle track to preview:"))
+        self.layout.addWidget(self.track_combo)
+
+        self.preview_text = QTextEdit()
+        self.preview_text.setReadOnly(True)
+        self.layout.addWidget(self.preview_text)
         
-class Worker(QObject):
-    finished = pyqtSignal(object); error = pyqtSignal(tuple); progress = pyqtSignal(int, str)
-    item_status_changed = pyqtSignal(str, str)
-    item_progress = pyqtSignal(str, int)
-    
-    def __init__(self, fn: Callable, *args, **kwargs):
-        super().__init__(); self.fn, self.args, self.kwargs = fn, args, kwargs
-    def run(self):
-        try:
-            if 'progress_callback' in inspect.signature(self.fn).parameters:
-                self.kwargs['progress_callback'] = lambda p, s: self.progress.emit(p, s)
-            if 'item_status_emitter' in inspect.signature(self.fn).parameters:
-                self.kwargs['item_status_emitter'] = lambda p, s: self.item_status_changed.emit(p, s)
-            if 'item_progress_emitter' in inspect.signature(self.fn).parameters:
-                self.kwargs['item_progress_emitter'] = lambda p, i: self.item_progress.emit(p, i)
-            result = self.fn(*self.args, **self.kwargs); self.finished.emit(result)
-        except Exception as e: import traceback; self.error.emit((type(e), e, traceback.format_exc()))
+        self.lang_label = QLabel("Detected Language: N/A")
+        self.layout.addWidget(self.lang_label)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        self.button_box.rejected.connect(self.reject)
+        self.layout.addWidget(self.button_box)
+        
+        self.populate_tracks()
+        self.track_combo.currentIndexChanged.connect(self.on_track_selected)
+        
+        if self.track_combo.count() > 0:
+            self.on_track_selected(0)
+        else:
+            self.preview_text.setText("No text-based subtitle tracks found in this file.")
+
+    def populate_tracks(self):
+        for track in self.media_file.subtitle_tracks:
+            if track.is_text_based:
+                self.track_combo.addItem(track.get_display_name(), track)
+            
+    def on_track_selected(self, index: int):
+        track = self.track_combo.itemData(index)
+        if not track:
+            return
+        
+        self.preview_text.setText("Loading preview...")
+        self.lang_label.setText("Detecting language...")
+        
+        self.thread = QThread()
+        self.worker = Worker(subtitlesmkv.get_subtitle_details, self.media_file.source_path, track.index)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.on_preview_finished)
+        self.thread.start()
+
+    def on_preview_finished(self, result: Tuple[str, str]):
+        snippet, lang = result
+        self.preview_text.setText(snippet)
+        self.lang_label.setText(f"Detected Language: {lang}")
+        if self.thread:
+            self.thread.quit()
+            self.thread.wait()
+
+class SubtitleEditorDialog(QDialog):
+    """A dialog to remove subtitle tracks from an MKV file."""
+    track_modified = pyqtSignal(QWidget)
+
+    def __init__(self, media_file: MediaFile, parent=None):
+        super().__init__(parent)
+        self.media_file = media_file
+        self.parent_widget = parent
+        self.setWindowTitle("Edit/Remove Subtitle Tracks")
+        self.setMinimumWidth(600)
+        self.layout = QVBoxLayout(self)
+        self.thread = None
+        self.worker = None
+
+        self.layout.addWidget(QLabel("Select tracks to permanently remove:"))
+        self.track_list = QListWidget()
+        self.track_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.layout.addWidget(self.track_list)
+        self.populate_list()
+        
+        self.remove_button = QPushButton("Remove Selected Tracks")
+        self.layout.addWidget(self.remove_button)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        self.button_box.rejected.connect(self.reject)
+        self.layout.addWidget(self.button_box)
+        
+        self.remove_button.clicked.connect(self.remove_selected_tracks)
+        
+    def populate_list(self):
+        self.track_list.clear()
+        for track in self.media_file.subtitle_tracks:
+            item = QListWidgetItem(track.get_display_name())
+            item.setData(Qt.ItemDataRole.UserRole, track.index)
+            self.track_list.addItem(item)
+            
+    def remove_selected_tracks(self):
+        selected_items = self.track_list.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "No Selection", "Please select one or more tracks to remove.")
+            return
+
+        track_ids_to_remove = [item.data(Qt.ItemDataRole.UserRole) for item in selected_items]
+        
+        reply = QMessageBox.question(self, "Confirm Removal", 
+                                     f"Are you sure you want to permanently remove {len(track_ids_to_remove)} subtitle track(s)?\n\nThis will rewrite the source MKV file and cannot be undone.",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+                                     QMessageBox.StandardButton.No)
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.remove_button.setEnabled(False)
+            self.remove_button.setText("Removing...")
+            self.thread = QThread()
+            self.worker = Worker(mkv_modifier.remove_subtitle_tracks, self.media_file.source_path, track_ids_to_remove)
+            self.worker.moveToThread(self.thread)
+            self.thread.started.connect(self.worker.run)
+            self.worker.finished.connect(self.on_removal_finished)
+            self.thread.start()
+            
+    def on_removal_finished(self, success: bool):
+        if success:
+            QMessageBox.information(self, "Success", "Tracks removed successfully. The file list will now be refreshed.")
+            self.track_modified.emit(self.parent_widget)
+            self.accept()
+        else:
+            QMessageBox.critical(self, "Error", "Failed to remove tracks. Please check the application logs for more details.")
+            self.remove_button.setEnabled(True)
+            self.remove_button.setText("Remove Selected Tracks")
+        
+        if self.thread:
+            self.thread.quit()
+            self.thread.wait()
+
+
+# --- Main UI Component Classes ---
 
 class MediaFileItemWidget(QFrame):
     def __init__(self, media_file: MediaFile, dashboard_ref: 'Dashboard'):
@@ -659,7 +803,6 @@ class MediaFileItemWidget(QFrame):
         controls_layout.addWidget(profile_group, 1)
         self.stack.addWidget(widget)
         
-        # Connect signals to slots
         self.fetch_meta_btn.clicked.connect(self.open_metadata_fetch)
         self.burn_combo.currentIndexChanged.connect(self.update_conversion_profile_summary)
         self.remux_checkbox.stateChanged.connect(self.update_conversion_profile_summary)
@@ -668,18 +811,14 @@ class MediaFileItemWidget(QFrame):
         self.edit_sub_btn.clicked.connect(self.open_subtitle_editor)
 
     def open_metadata_fetch(self):
-        """Opens the TMDb search dialog and handles the result."""
         if not tmdb_client.get_api_key():
             QMessageBox.warning(self, "API Key Required", "Please set your TMDb API key in Settings first.")
             return
             
         search_dialog = MetadataSearchDialog(self.media_file.filename, self)
-        
-        # *** FIX: Show the dialog modally using exec() and check the result ***
         if search_dialog.exec() == QDialog.DialogCode.Accepted:
             selected_movie = search_dialog.get_selected_movie()
             if selected_movie:
-                # Open the edit dialog and pre-fill it with the fetched data
                 self.open_rename_dialog(fetched_data=selected_movie)
     
     def open_rename_dialog(self, fetched_data: Optional[Dict] = None):
@@ -698,7 +837,6 @@ class MediaFileItemWidget(QFrame):
             self.media_file.comment = comment
             self.refresh_state()
 
-    # ... rest of MediaFileItemWidget is unchanged ...
     def open_subtitle_preview(self):
         dialog = SubtitlePreviewDialog(self.media_file, self)
         dialog.exec()
@@ -866,10 +1004,10 @@ class MediaFileItemWidget(QFrame):
                 track_idx = getattr(track_data, 'index', -2)
                 if not (self.media_file.burned_subtitle and burn_idx == track_idx): track_data.action = "copy"
 
+
+# --- Main Application Class ---
+
 class Dashboard(QWidget):
-    # ... The entire Dashboard class is unchanged, so it's omitted for brevity ...
-    # The fix was entirely within the MediaFileItemWidget class above.
-    # The full Dashboard class from the previous response remains correct.
     def __init__(self):
         super().__init__()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
@@ -1149,7 +1287,6 @@ class Dashboard(QWidget):
         widget = self.file_list.itemWidget(item)
         if widget:
             new_media_file_state = subtitlesmkv.scan_file(widget.media_file.source_path)
-            # Preserve user-edited metadata after a refresh
             new_media_file_state.output_filename = widget.media_file.output_filename
             new_media_file_state.title = widget.media_file.title
             new_media_file_state.year = widget.media_file.year
@@ -1181,6 +1318,7 @@ class Dashboard(QWidget):
     def show_message(self, title: str, message: str):
         msg_box = QMessageBox(self); msg_box.setWindowTitle(title); msg_box.setText(message); msg_box.exec()
 
+# --- Application Entry Point ---
 if __name__ == "__main__":
     from multiprocessing import freeze_support
     freeze_support()
